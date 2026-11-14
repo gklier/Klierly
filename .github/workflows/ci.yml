@@ -110,5 +110,9 @@ jobs:
           bad=$(git ls-files | grep -E '(^|/)\.env($|\.)|(^|/)data/|\.sqlite3?$|\.dump$|(^|/)uploads/' | grep -v '\.env\.example$' || true)
           if [ -n "$bad" ]; then echo "Forbidden files tracked:"; echo "$bad"; exit 1; fi
       - name: No credential-shaped strings
+        # Test folders are excluded: they contain obvious dummy keys used to test redaction.
         run: |
-          if git grep -nIE '(sk-[A-Za-z0-9]{20,}|clx_[A-Za-z0-9_-]{30,}|-----BEGIN (RSA |EC )?PRIVATE KEY-----)' -- . ':!*.md' ':!web/package-lock.json' ':!web/tests' ':!web/e2e'; then  # test files hold obvious dummies echo "Possible secret committed"; exit 1; fi
+          if git grep -nIE '(sk-[A-Za-z0-9]{20,}|clx_[A-Za-z0-9_-]{30,}|-----BEGIN (RSA |EC )?PRIVATE KEY-----)' -- . ':!*.md' ':!web/package-lock.json' ':!web/tests' ':!web/e2e'; then
+            echo "Possible secret committed"
+            exit 1
+          fi
