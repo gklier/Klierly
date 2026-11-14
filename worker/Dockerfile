@@ -1,4 +1,4 @@
-# CourseLab worker: file parsing + numerical validation.
+# Klierly worker: file parsing + numerical validation.
 # Multi-arch friendly: every dependency ships manylinux wheels for amd64 and arm64.
 FROM python:3.13-slim
 

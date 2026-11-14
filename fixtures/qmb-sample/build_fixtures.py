@@ -1,6 +1,6 @@
-"""Build the SYNTHETIC sample course used by CourseLab tests and the demo.
+"""Build the SYNTHETIC sample course used by Klierly tests and the demo.
 
-Everything here is original sample material written for CourseLab testing.
+Everything here is original sample material written for Klierly testing.
 It is NOT actual University of Florida (or any university's) course content.
 
 Run with the worker's virtualenv:  ../../worker/.venv/bin/python build_fixtures.py
@@ -16,7 +16,7 @@ import pandas as pd
 import statsmodels.api as sm
 
 HERE = Path(__file__).parent
-DISCLAIMER = ("Synthetic sample material written for CourseLab testing. "
+DISCLAIMER = ("Synthetic sample material written for Klierly testing. "
               "It is not actual University of Florida course content.")
 
 # ------------------------------------------------------------------ dataset
@@ -303,7 +303,7 @@ With a multiplicative seasonal model, the forecast is the trend value multiplied
 
 # ------------------------------------------------------------------ transcript
 cues = [
-    "Welcome back. This is a synthetic sample lecture written for CourseLab testing. Today we read a regression output table from top to bottom.",
+    "Welcome back. This is a synthetic sample lecture written for Klierly testing. Today we read a regression output table from top to bottom.",
     "Start with the summary of fit. R-square tells you the share of the variation in the response that the model explains.",
     "Right below it you will see R-square adjusted. Use the adjusted value when you compare models that have different numbers of predictors.",
     "Root mean square error is in the units of the response. Think of it as the typical size of a prediction miss.",
@@ -342,7 +342,7 @@ def build_pdf():
     from reportlab.platypus import PageBreak, Paragraph, SimpleDocTemplate, Spacer
     st = getSampleStyleSheet()
     doc = SimpleDocTemplate(str(HERE / "module1-simple-regression.pdf"), pagesize=letter, invariant=1,
-                            title="Module 1: Simple Linear Regression", author="CourseLab synthetic sample")
+                            title="Module 1: Simple Linear Regression", author="Klierly synthetic sample")
     flow = [Paragraph("Module 1: Simple Linear Regression", st["Title"]), Paragraph(DISCLAIMER, st["Italic"]), Spacer(1, 12)]
     for i, (h, paras) in enumerate(M1):
         if i in (2, 4):

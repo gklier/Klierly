@@ -7,7 +7,7 @@ const ui = Instrument_Sans({ subsets: ["latin"], variable: "--font-ui", display:
 const reading = Newsreader({ subsets: ["latin"], variable: "--font-reading", display: "swap" });
 
 export const metadata: Metadata = {
-  title: { default: "CourseLab", template: "%s · CourseLab" },
+  title: { default: "Klierly", template: "%s · Klierly" },
   description: "Turn the course material you are allowed to use into a personal study system.",
   robots: { index: false, follow: false },
 };

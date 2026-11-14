@@ -1,6 +1,6 @@
 REGRESSION OUTPUT EXCERPTS (store-sales.csv)
 
-Synthetic sample material written for CourseLab testing. It is not actual University of Florida course content.
+Synthetic sample material written for Klierly testing. It is not actual University of Florida course content.
 The layout imitates the style of common statistical software reports; it was produced by a script, not by any commercial package.
 Response: sales (thousand dollars per week). n = 60 stores.
 

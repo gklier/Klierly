@@ -1,6 +1,6 @@
 # QMB 3250-like Sample Course: Statistics for Business Decisions (Synthetic Syllabus)
 
-> Synthetic sample material written for CourseLab testing. It is not actual University of Florida course content. Instructor names, dates, weights and policies below are fictional.
+> Synthetic sample material written for Klierly testing. It is not actual University of Florida course content. Instructor names, dates, weights and policies below are fictional.
 
 ## Course description
 

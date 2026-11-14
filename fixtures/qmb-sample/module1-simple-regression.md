@@ -1,6 +1,6 @@
 # Module 1: Simple Linear Regression
 
-> Synthetic sample material written for CourseLab testing. It is not actual University of Florida course content.
+> Synthetic sample material written for Klierly testing. It is not actual University of Florida course content.
 
 ## The least-squares line
 

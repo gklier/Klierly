@@ -81,7 +81,7 @@ export async function pasteText(_: ActionState, fd: FormData): Promise<ActionSta
   if (url && !/^https?:\/\//i.test(url)) return { error: "The page address should start with http:// or https://." };
   const title = str(fd, "title", 200) || "Pasted text";
   const check = assessAssessment({ url, title, text });
-  if (check.blocked) return { error: `This looks like an active assessment or a restricted page (${check.reasons.join("; ")}). CourseLab does not import those. Study from notes, slides and readings instead.` };
+  if (check.blocked) return { error: `This looks like an active assessment or a restricted page (${check.reasons.join("; ")}). Klierly does not import those. Study from notes, slides and readings instead.` };
   if (!rateLimit(`import:${g.user.id}`, 60, 600_000).ok) return { error: "Too many imports in a short time. Try again in a few minutes." };
   const moduleId = str(fd, "moduleId");
   try {

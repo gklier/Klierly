@@ -1,4 +1,4 @@
-"""CourseLab worker: stateless file parsing and numerical validation.
+"""Klierly worker: stateless file parsing and numerical validation.
 
 Document contents are never logged or persisted.
 """
@@ -20,7 +20,7 @@ from .parsers import PARSER_NAMES, parse_bytes, parse_pasted
 VERSION = "0.1.0"
 MAX_TEXT_CHARS = 2_000_000
 
-app = FastAPI(title="CourseLab worker", version=VERSION, docs_url=None, redoc_url=None, openapi_url=None)
+app = FastAPI(title="Klierly worker", version=VERSION, docs_url=None, redoc_url=None, openapi_url=None)
 
 
 def max_upload_bytes() -> int:

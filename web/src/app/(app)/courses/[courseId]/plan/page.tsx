@@ -53,7 +53,7 @@ export default async function PlanPage({ params, searchParams }: { params: Promi
           <h1 className="text-2xl font-semibold">Study plan</h1>
           {plan ? (
             <p className="mt-1 text-muted">Exam {formatDate(plan.examDate, { weekday: "long", month: "long", day: "numeric" })} — {daysBetween(now, plan.examDate) <= 0 ? "today or passed" : `${daysBetween(now, plan.examDate)} days away`} · {plan.minutesPerDay} minutes a day{plan.desiredGrade ? ` · aiming for ${plan.desiredGrade}` : ""}</p>
-          ) : <p className="mt-1 text-muted">Tell CourseLab about your exam and it will lay out retrieval practice, worked examples and spaced review day by day.</p>}
+          ) : <p className="mt-1 text-muted">Tell Klierly about your exam and it will lay out retrieval practice, worked examples and spaced review day by day.</p>}
         </div>
         {plan && !showForm && (
           <div className="flex gap-2">
@@ -130,7 +130,7 @@ export default async function PlanPage({ params, searchParams }: { params: Promi
 
           <fieldset className="rounded-lg border border-line p-3">
             <legend className="px-1 text-sm font-semibold">Exam format</legend>
-            <label className="flex items-start gap-2.5 text-sm"><input type="checkbox" name="formatConfirmed" defaultChecked={plan?.examFormat.confirmed} className="mt-1 accent-[var(--accent)]" /><span>My instructor has announced the format. <span className="text-muted">Leave unticked if you are not sure — CourseLab will not guess it, and the mock exam will use a default length.</span></span></label>
+            <label className="flex items-start gap-2.5 text-sm"><input type="checkbox" name="formatConfirmed" defaultChecked={plan?.examFormat.confirmed} className="mt-1 accent-[var(--accent)]" /><span>My instructor has announced the format. <span className="text-muted">Leave unticked if you are not sure — Klierly will not guess it, and the mock exam will use a default length.</span></span></label>
             <div className="mt-3 grid gap-3 sm:grid-cols-[8rem_8rem_1fr]">
               <div><label className="label" htmlFor="fq">Questions</label><input id="fq" name="formatQuestions" type="number" min={1} max={200} className="input" defaultValue={plan?.examFormat.questionCount ?? ""} /></div>
               <div><label className="label" htmlFor="fm">Minutes</label><input id="fm" name="formatMinutes" type="number" min={1} max={600} className="input" defaultValue={plan?.examFormat.minutes ?? ""} /></div>

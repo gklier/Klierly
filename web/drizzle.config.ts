@@ -4,5 +4,5 @@ export default defineConfig({
   schema: "./src/db/schema.ts",
   out: "./drizzle",
   dialect: "postgresql",
-  dbCredentials: { url: process.env.DATABASE_URL ?? "postgres://courselab:courselab_dev@127.0.0.1:5432/courselab" },
+  dbCredentials: { url: process.env.DATABASE_URL ?? "postgres://klierly:klierly_dev@127.0.0.1:5432/klierly" },
 });

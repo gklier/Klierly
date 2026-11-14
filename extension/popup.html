@@ -2,17 +2,17 @@
 <html lang="en">
 <head>
   <meta charset="utf-8">
-  <title>CourseLab Capture</title>
+  <title>Klierly Capture</title>
   <link rel="stylesheet" href="ui.css">
 </head>
 <body class="popup">
 <main>
-  <h1>Save this page to CourseLab</h1>
+  <h1>Save this page to Klierly</h1>
   <p id="status" class="muted small" role="status">Checking this page…</p>
 
   <section id="view-disconnected" hidden>
     <div class="notice">
-      <p><strong>Not connected yet.</strong> Enter your CourseLab server address and a pairing token to use the extension.</p>
+      <p><strong>Not connected yet.</strong> Enter your Klierly server address and a pairing token to use the extension.</p>
       <button id="open-options" class="primary" type="button">Open extension settings</button>
     </div>
   </section>
@@ -43,7 +43,7 @@
       <strong>What happens when you click Import:</strong> the title, the page address and the text shown above are sent to
       <strong id="server-host"></strong> and stored in your account there. Nothing has been sent so far. No passwords, cookies, form entries, grades or other tabs are read.
     </div>
-    <label class="check"><input id="permission" type="checkbox"> <span>I have permission to use this material with CourseLab for my own study, and this is not a graded assessment in progress.</span></label>
+    <label class="check"><input id="permission" type="checkbox"> <span>I have permission to use this material with Klierly for my own study, and this is not a graded assessment in progress.</span></label>
     <div id="error" class="notice bad small" role="alert" hidden></div>
     <div class="row">
       <button id="import" class="primary" type="button" disabled>Import</button>
@@ -54,7 +54,7 @@
   <section id="view-done" hidden>
     <div class="notice good" role="status">
       <p><strong id="done-title">Imported.</strong> <span id="done-text"></span></p>
-      <p><a id="done-link" target="_blank" rel="noopener">Open it in CourseLab</a></p>
+      <p><a id="done-link" target="_blank" rel="noopener">Open it in Klierly</a></p>
     </div>
   </section>
 </main>

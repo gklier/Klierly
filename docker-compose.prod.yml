@@ -1,6 +1,6 @@
 # OPTIONAL public deployment overlay (not used for local testing, never run automatically):
 #   docker compose -f docker-compose.yml -f docker-compose.prod.yml up -d --build
-# Requires in .env: DOMAIN=courselab.example.com, APP_URL=https://courselab.example.com, INVITE_CODE=<long random>
+# Requires in .env: DOMAIN=klierly.example.com, APP_URL=https://klierly.example.com, INVITE_CODE=<long random>
 # Caddy terminates HTTPS (automatic Let's Encrypt certificates) and is the only service with public ports.
 services:
   web:

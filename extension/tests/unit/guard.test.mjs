@@ -81,8 +81,8 @@ test('text cleaning keeps wording and removes invisible characters', () => {
 
 test('server address and link validation', () => {
   assert.deepEqual(normalizeServerUrl('http://localhost:3000/some/path'), { ok: true, url: 'http://localhost:3000' });
-  assert.equal(normalizeServerUrl('https://courselab.example.edu').ok, true);
-  assert.equal(normalizeServerUrl('http://courselab.example.edu').ok, false); // https required off-machine
+  assert.equal(normalizeServerUrl('https://klierly.example.edu').ok, true);
+  assert.equal(normalizeServerUrl('http://klierly.example.edu').ok, false); // https required off-machine
   assert.equal(normalizeServerUrl('https://user:pw@example.edu').ok, false);
   assert.equal(normalizeServerUrl('javascript:alert(1)').ok, false);
   assert.equal(normalizeServerUrl('').ok, false);

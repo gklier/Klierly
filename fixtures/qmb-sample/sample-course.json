@@ -1,6 +1,6 @@
 {
-  "note": "Synthetic sample material written for CourseLab testing. It is not actual University of Florida course content. Questions were written by hand against the synthetic fixtures; numeric answers are recomputed by the worker when the sample is loaded.",
-  "course": { "name": "Sample course: QMB 3250-like (synthetic)", "term": "Fall 2026", "goal": "Try CourseLab with synthetic material before importing your own." },
+  "note": "Synthetic sample material written for Klierly testing. It is not actual University of Florida course content. Questions were written by hand against the synthetic fixtures; numeric answers are recomputed by the worker when the sample is loaded.",
+  "course": { "name": "Sample course: QMB 3250-like (synthetic)", "term": "Fall 2026", "goal": "Try Klierly with synthetic material before importing your own." },
   "files": ["syllabus.md", "module1-simple-regression.pdf", "module2-multiple-regression.docx", "module3-indicators-interactions.pptx", "module4-forecasting.md", "store-sales.csv", "model-output.txt", "lecture-module2.vtt"],
   "topics": [
     { "key": "ls", "name": "Least-squares line and residuals", "module": 1,

@@ -65,7 +65,7 @@ export default async function MaterialsPage({ params, searchParams }: { params: 
     <div className="space-y-7">
       <div>
         <h1 className="text-2xl font-semibold">Materials</h1>
-        <p className="mt-1 text-muted">Everything CourseLab knows about this course comes from what you add here. It stays private to your account.</p>
+        <p className="mt-1 text-muted">Everything Klierly knows about this course comes from what you add here. It stays private to your account.</p>
       </div>
 
       <ImportPanel courseId={course.id} modules={modules.map((m) => ({ id: m.id, name: m.name }))} maxMb={Math.round(env.maxUploadBytes / 1048576)} pendingAtLoad={pending} />

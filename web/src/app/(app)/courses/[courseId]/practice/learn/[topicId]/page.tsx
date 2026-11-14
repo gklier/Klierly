@@ -36,7 +36,7 @@ export default async function LearnPage({ params }: { params: Promise<{ courseId
       <h1 className="mt-2 text-2xl font-semibold">{topic.name}</h1>
 
       {chunks.length === 0 && !note ? (
-        <p className="notice notice-warn mt-4"><strong>No imported material mentions this topic.</strong> CourseLab will not explain a topic from general knowledge and present it as your course. <Link className="link" href={`${base}/materials`}>Import notes or slides that cover it</Link>.</p>
+        <p className="notice notice-warn mt-4"><strong>No imported material mentions this topic.</strong> Klierly will not explain a topic from general knowledge and present it as your course. <Link className="link" href={`${base}/materials`}>Import notes or slides that cover it</Link>.</p>
       ) : (
         <>
           {note ? (

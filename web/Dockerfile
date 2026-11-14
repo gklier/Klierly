@@ -1,4 +1,4 @@
-# CourseLab web app. Build from the repository root so the synthetic sample course is included:
+# Klierly web app. Build from the repository root so the synthetic sample course is included:
 #   docker build -f web/Dockerfile .
 # Multi-arch: node:22-slim is published for linux/amd64 and linux/arm64; no native add-ons are compiled.
 FROM node:22-slim AS build

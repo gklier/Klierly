@@ -1,9 +1,9 @@
 WEBVTT
 
-NOTE Synthetic sample material written for CourseLab testing. It is not actual University of Florida course content.
+NOTE Synthetic sample material written for Klierly testing. It is not actual University of Florida course content.
 
 00:00:00.000 --> 00:00:19.000
-Welcome back. This is a synthetic sample lecture written for CourseLab testing. Today we read a regression output table from top to bottom.
+Welcome back. This is a synthetic sample lecture written for Klierly testing. Today we read a regression output table from top to bottom.
 
 00:00:20.000 --> 00:00:39.000
 Start with the summary of fit. R-square tells you the share of the variation in the response that the model explains.

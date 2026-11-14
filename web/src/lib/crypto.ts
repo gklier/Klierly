@@ -24,7 +24,7 @@ export const sha256 = (data: string | Buffer) => createHash("sha256").update(dat
 export const randomToken = (bytes = 32) => randomBytes(bytes).toString("base64url");
 
 function key(purpose: string): Buffer {
-  return Buffer.from(hkdfSync("sha256", env.appSecret, "courselab", purpose, 32));
+  return Buffer.from(hkdfSync("sha256", env.appSecret, "klierly", purpose, 32));
 }
 
 /** AES-256-GCM. Output: v1.<iv>.<tag>.<ciphertext> (base64url). */

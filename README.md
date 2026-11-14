@@ -1,6 +1,6 @@
-# CourseLab (working title)
+# Klierly (working title)
 
-A private, course-grounded study app. You import course material you are allowed to use; CourseLab
+A private, course-grounded study app. You import course material you are allowed to use; Klierly
 turns it into a searchable library, a day-by-day study plan and original practice questions with
 scored feedback and source references. It is a learning tool, not a way to complete graded work,
 and it does not predict exam questions or grades.
@@ -15,7 +15,7 @@ Needs Node 22+, Python 3.11+, PostgreSQL 16.
 
 ```bash
 # 1. Database (once)
-createuser courselab --pwprompt && createdb courselab -O courselab
+createuser klierly --pwprompt && createdb klierly -O klierly
 
 # 2. Settings
 cp .env.example web/.env.local
@@ -70,7 +70,7 @@ six short excerpts per topic are sent to that provider. A daily request limit pr
 
 UF NaviGator Toolkit is listed as **experimental**: confirm in UF's current terms that your
 allocation may be used with a third-party tool, and take the endpoint and model ID from UF's
-documentation, before using it. CourseLab makes no claim about either.
+documentation, before using it. Klierly makes no claim about either.
 
 For testing without a paid provider: `cd web && npm run mock-llm` starts a deterministic stand-in
 (base URL `http://127.0.0.1:4010/v1`, key `test-key`, model `mock-1`). Its questions are
@@ -97,7 +97,7 @@ structurally valid but trivial — it exists to test the pipeline, not to study 
 ## Browser extension (optional)
 
 Chrome/Edge: `chrome://extensions` (or `edge://extensions`) → Developer mode → **Load unpacked** →
-choose the `extension/` folder. Then in CourseLab: Settings → Browser extension → **Create pairing
+choose the `extension/` folder. Then in Klierly: Settings → Browser extension → **Create pairing
 token**; paste the server address and token into the extension's settings. Details, limits and the
 pre-publication checklist: `extension/README.md`.
 
@@ -105,11 +105,11 @@ pre-publication checklist: `extension/README.md`.
 
 ```bash
 cd worker && .venv/bin/pip install -r requirements-dev.txt && .venv/bin/python -m pytest -q
-cd web && npm run typecheck && npm run lint && npm test     # needs Postgres + worker running; uses database courselab_test
-cd web && npm run test:e2e                                   # builds, then Playwright; uses database courselab_e2e
+cd web && npm run typecheck && npm run lint && npm test     # needs Postgres + worker running; uses database klierly_test
+cd web && npm run test:e2e                                   # builds, then Playwright; uses database klierly_e2e
 cd extension && npm test
 ```
-`courselab_test` must exist (`createdb courselab_test -O courselab`); the role needs CREATEDB for the E2E reset.
+`klierly_test` must exist (`createdb klierly_test -O klierly`); the role needs CREATEDB for the E2E reset.
 
 ## Founder action required
 

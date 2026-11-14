@@ -1,6 +1,6 @@
 # Module 4: Time-Series Forecasting
 
-> Synthetic sample material written for CourseLab testing. It is not actual University of Florida course content.
+> Synthetic sample material written for Klierly testing. It is not actual University of Florida course content.
 
 ## Components of a time series
 

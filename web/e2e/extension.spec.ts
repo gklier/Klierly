@@ -58,7 +58,7 @@ test.beforeAll(async ({ browser }) => {
   expect(token).toMatch(/^clx_/);
 
   // Test copy of the extension with a host permission for the fixture origin only.
-  tmp = fs.mkdtempSync(path.join(os.tmpdir(), "courselab-ext-"));
+  tmp = fs.mkdtempSync(path.join(os.tmpdir(), "klierly-ext-"));
   const copy = path.join(tmp, "ext");
   fs.cpSync(EXT_SRC, copy, { recursive: true, filter: (src) => !/node_modules|dist|tests/.test(path.relative(EXT_SRC, src)) });
   const { publicKey } = generateKeyPairSync("rsa", { modulusLength: 2048 });
@@ -101,11 +101,11 @@ test("popup explains how to connect when no token is saved", async () => {
 test("options: bad token is refused, a real pairing token connects", async () => {
   const options = await ctx.newPage();
   await options.goto(`chrome-extension://${extId}/options.html`);
-  await options.getByLabel("CourseLab server address").fill("http://courselab.example.edu");
+  await options.getByLabel("Klierly server address").fill("http://klierly.example.edu");
   await options.getByLabel("Pairing token").fill(token);
   await options.getByRole("button", { name: "Test connection" }).click();
   await expect(options.getByRole("status")).toContainText("Use https://");
-  await options.getByLabel("CourseLab server address").fill(APP);
+  await options.getByLabel("Klierly server address").fill(APP);
   await options.getByLabel("Pairing token").fill("clx_this-token-does-not-exist-000000");
   await options.getByRole("button", { name: "Test connection" }).click();
   await expect(options.getByRole("status")).toContainText("pairing token was not accepted");
@@ -136,7 +136,7 @@ test("capture a course page: preview first, nothing sent before Import, source a
   await popup.getByRole("button", { name: "Import" }).click();
   await expect(popup.getByText("Imported.")).toBeVisible();
   expect(importRequests.filter((m) => m === "POST")).toHaveLength(1);
-  const viewUrl = await popup.getByRole("link", { name: "Open it in CourseLab" }).getAttribute("href");
+  const viewUrl = await popup.getByRole("link", { name: "Open it in Klierly" }).getAttribute("href");
   expect(viewUrl).toMatch(new RegExp(`^${APP}/courses/${courseId}/materials/[0-9a-f-]+$`));
   await popup.close();
 
@@ -164,7 +164,7 @@ test("an active quiz is blocked: no preview, no import", async () => {
   const before = importRequests.length;
   const popup = await openPopupFor("/courses/1/quizzes/7/take");
   await expect(popup.getByRole("heading", { name: "This page looks like an assessment in progress" })).toBeVisible();
-  await expect(popup.getByText("CourseLab does not capture or help with graded assessments.")).toBeVisible();
+  await expect(popup.getByText("Klierly does not capture or help with graded assessments.")).toBeVisible();
   await expect(popup.getByRole("button", { name: "Import" })).toBeHidden();
   await expect(popup.getByLabel(/Text that will be imported/)).toBeHidden();
   expect(await popup.content()).not.toMatch(/QUIZ-QUESTION|QUIZ-CHOICE/); // question text never reaches the popup

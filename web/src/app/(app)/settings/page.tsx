@@ -27,7 +27,7 @@ export default async function SettingsPage() {
 
       <section id="ai" className="scroll-mt-20" aria-labelledby="ai-h">
         <h2 id="ai-h" className="text-lg font-semibold">AI connection</h2>
-        <p className="mt-1 text-sm text-muted">Optional. Without it you can import, search, plan and practise with existing questions. With it, CourseLab can write new questions and study notes from your materials. It works with any provider that offers an OpenAI-compatible API (a <code>/chat/completions</code> endpoint).</p>
+        <p className="mt-1 text-sm text-muted">Optional. Without it you can import, search, plan and practise with existing questions. With it, Klierly can write new questions and study notes from your materials. It works with any provider that offers an OpenAI-compatible API (a <code>/chat/completions</code> endpoint).</p>
 
         {provider && (
           <div className="panel mt-3 p-4 text-sm">
@@ -35,7 +35,7 @@ export default async function SettingsPage() {
               {provider.lastTestAt && <span className={`badge ml-2 ${provider.lastTestOk ? "badge-good" : "badge-bad"}`}>{provider.lastTestOk ? "Last test passed" : "Last test failed"}</span>}
               {provider.preset === "navigator-experimental" && <span className="badge badge-warn ml-2">Experimental</span>}</p>
             <p className="mt-1 text-muted"><span className="tnum">{used}/{provider.dailyRequestLimit}</span> requests today · last 30 days: <span className="tnum">{month?.n ?? 0}</span> requests ({month?.failed ?? 0} failed, {month?.cached ?? 0} served from cache), about <span className="tnum">{((month?.pt ?? 0) + (month?.ct ?? 0)).toLocaleString("en-US")}</span> tokens as reported by the provider.</p>
-            <p className="mt-1 text-muted">CourseLab cannot see your provider&apos;s prices or remaining credit. Check your usage on the provider&apos;s own dashboard; the daily limit here is your safeguard against surprises.</p>
+            <p className="mt-1 text-muted">Klierly cannot see your provider&apos;s prices or remaining credit. Check your usage on the provider&apos;s own dashboard; the daily limit here is your safeguard against surprises.</p>
             <div className="mt-3 flex flex-wrap gap-2">
               <ActionForm action={testProvider}><Submit className="btn btn-sm" pendingText="Testing…">Test connection</Submit></ActionForm>
               <ActionForm action={removeProvider}><Submit className="btn btn-sm btn-danger" pendingText="Removing…">Remove provider</Submit></ActionForm>
@@ -51,7 +51,7 @@ export default async function SettingsPage() {
               <option value="openai-compatible">OpenAI-compatible API (any provider or a self-hosted model)</option>
               <option value="navigator-experimental">UF NaviGator Toolkit — experimental, unverified</option>
             </select>
-            <p className="help"><strong>NaviGator:</strong> marked experimental. Before using it, confirm in UF&apos;s current terms that your personal allocation may be used with a third-party tool like this, and take the base URL and model ID from UF&apos;s own documentation. CourseLab does not assume either.</p>
+            <p className="help"><strong>NaviGator:</strong> marked experimental. Before using it, confirm in UF&apos;s current terms that your personal allocation may be used with a third-party tool like this, and take the base URL and model ID from UF&apos;s own documentation. Klierly does not assume either.</p>
           </div>
           <div className="grid gap-4 sm:grid-cols-2">
             <div><label className="label" htmlFor="baseUrl">Base URL</label><input id="baseUrl" name="baseUrl" className="input" required placeholder="https://api.example.com/v1" defaultValue={provider?.baseUrl ?? ""} autoComplete="off" />
@@ -99,7 +99,7 @@ export default async function SettingsPage() {
         <h2 id="priv-h" className="text-lg font-semibold">Privacy and your data</h2>
         <ul className="mt-2 list-disc space-y-1 pl-5 text-sm text-muted">
           <li>Your materials, questions and results are visible only to your account. There is no shared library and nothing is published.</li>
-          <li>Nothing is used to train models by CourseLab, and nothing is sold.</li>
+          <li>Nothing is used to train models by Klierly, and nothing is sold.</li>
           <li>Delete a source on its page, a course in its settings, or everything below. Deletion removes files, extracted text and the search index.</li>
         </ul>
         <p className="mt-2 text-sm"><Link className="link" href="/privacy">Read the privacy policy draft and exact data flows</Link></p>

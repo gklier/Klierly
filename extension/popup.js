@@ -5,7 +5,7 @@ import { collectSignals, extractVisibleText } from './src/extract.js';
 import { evaluateGuard, restrictedPageReason } from './src/guard.js';
 
 const $ = (id) => document.getElementById(id);
-const FALLBACK = 'You can still add permitted material in CourseLab itself: copy the text and use Materials → Paste text, or upload the file.';
+const FALLBACK = 'You can still add permitted material in Klierly itself: copy the text and use Materials → Paste text, or upload the file.';
 let settings, tab, capture = null, courses = [];
 
 function show(view) {
@@ -51,7 +51,7 @@ async function extract(selectionOnly) {
   const { text, truncated } = limitText(cleanText(raw?.text ?? ''));
   // Second guard pass, now with the text (e.g. a running timer rendered as plain text).
   const verdict = evaluateGuard({ url: raw.url, title: raw.title, text, domSignals: capture?.domSignals ?? {} });
-  if (verdict.blocked) { capture = null; block('This page looks like an assessment in progress', verdict.reasons, `CourseLab does not capture graded assessments. ${FALLBACK}`); return; }
+  if (verdict.blocked) { capture = null; block('This page looks like an assessment in progress', verdict.reasons, `Klierly does not capture graded assessments. ${FALLBACK}`); return; }
   capture = { ...capture, url: raw.url, text, usedSelection: raw.usedSelection };
   $('preview').value = text;
   $('count').textContent = `(${formatCount(text.length)}${truncated ? ', shortened to the import limit' : ''})`;
@@ -80,8 +80,8 @@ async function init() {
   const verdict = evaluateGuard({ url: signals.url, title: signals.title, text: '', domSignals: signals.domSignals });
   if (verdict.blocked) {
     return verdict.kind === 'private'
-      ? block('This page is not study material', verdict.reasons, 'Grades and class lists are personal records. CourseLab does not import them.')
-      : block('This page looks like an assessment in progress', verdict.reasons, `CourseLab does not capture or help with graded assessments. Finish it on your own; afterwards, study from permitted notes and readings. ${FALLBACK}`);
+      ? block('This page is not study material', verdict.reasons, 'Grades and class lists are personal records. Klierly does not import them.')
+      : block('This page looks like an assessment in progress', verdict.reasons, `Klierly does not capture or help with graded assessments. Finish it on your own; afterwards, study from permitted notes and readings. ${FALLBACK}`);
   }
   if (verdict.cautions.length) { $('cautions').textContent = verdict.cautions.join(' '); $('cautions').hidden = false; }
 
@@ -106,7 +106,7 @@ async function init() {
     $('error').hidden = false;
     return;
   }
-  if (!courses.length) { $('error').textContent = 'You have no courses yet. Create one in CourseLab first.'; $('error').hidden = false; return; }
+  if (!courses.length) { $('error').textContent = 'You have no courses yet. Create one in Klierly first.'; $('error').hidden = false; return; }
   const { lastCourseId } = await chrome.storage.local.get('lastCourseId');
   $('course').replaceChildren(...courses.map((c) => new Option(c.name, c.id)));
   if (courses.some((c) => c.id === lastCourseId)) $('course').value = lastCourseId;
@@ -125,7 +125,7 @@ async function doImport() {
     });
     await chrome.storage.local.set({ lastCourseId: $('course').value });
     $('done-title').textContent = res.duplicate ? 'Already imported.' : 'Imported.';
-    $('done-text').textContent = res.duplicate ? 'This exact text is already in the course.' : 'CourseLab is processing the text now.';
+    $('done-text').textContent = res.duplicate ? 'This exact text is already in the course.' : 'Klierly is processing the text now.';
     const link = safeHttpUrl(res.viewUrl);
     if (link) $('done-link').href = link; else $('done-link').hidden = true;
     show('done');

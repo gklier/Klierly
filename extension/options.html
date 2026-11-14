@@ -2,20 +2,20 @@
 <html lang="en">
 <head>
   <meta charset="utf-8">
-  <title>CourseLab Capture — settings</title>
+  <title>Klierly Capture — settings</title>
   <link rel="stylesheet" href="ui.css">
 </head>
 <body>
 <div class="options">
-  <h1 style="font-size:20px">CourseLab Capture settings</h1>
-  <p class="muted">Connect the extension to your own CourseLab server. It never asks for your LMS login, your CourseLab password, or any access token from your university.</p>
+  <h1 style="font-size:20px">Klierly Capture settings</h1>
+  <p class="muted">Connect the extension to your own Klierly server. It never asks for your LMS login, your Klierly password, or any access token from your university.</p>
   <form id="form">
-    <label for="server">CourseLab server address</label>
+    <label for="server">Klierly server address</label>
     <input id="server" type="url" placeholder="http://localhost:3000" required>
-    <p class="muted small">Use https:// unless CourseLab runs on this computer (localhost).</p>
+    <p class="muted small">Use https:// unless Klierly runs on this computer (localhost).</p>
     <label for="token">Pairing token</label>
     <input id="token" type="password" autocomplete="off" placeholder="clx_…" required>
-    <p class="muted small">Create it in CourseLab under Settings → Browser extension. It can only list your courses and add imports, and you can revoke it there at any time. It is stored only in this browser.</p>
+    <p class="muted small">Create it in Klierly under Settings → Browser extension. It can only list your courses and add imports, and you can revoke it there at any time. It is stored only in this browser.</p>
     <div class="row">
       <button class="primary" type="submit">Save</button>
       <button id="test" type="button">Test connection</button>

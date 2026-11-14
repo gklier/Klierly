@@ -122,7 +122,7 @@ export default async function PracticePage({ params }: { params: Promise<{ cours
           <h2 id="gen-h" className="flex items-center gap-2 text-base font-semibold"><Icon name="spark" />Generate new questions</h2>
           {!provider ? (
             <div className="mt-2">
-              <p className="notice"><strong>AI key required for generating new sets.</strong> {course.isSample ? "The sample course's ready-made questions work without one. " : ""}New questions are written by an AI provider you connect, from excerpts of your materials, then checked by CourseLab before they are saved.</p>
+              <p className="notice"><strong>AI key required for generating new sets.</strong> {course.isSample ? "The sample course's ready-made questions work without one. " : ""}New questions are written by an AI provider you connect, from excerpts of your materials, then checked by Klierly before they are saved.</p>
               <Link href="/settings#ai" className="btn mt-3">Connect an AI provider</Link>
             </div>
           ) : !course.allowExternalAi ? (

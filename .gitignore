@@ -14,3 +14,4 @@ playwright-report/
 extension/dist/
 *.log
 .DS_Store
+.venv

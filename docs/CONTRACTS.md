@@ -1,6 +1,6 @@
 # Internal contracts
 
-These are the explicit interfaces between the three parts of CourseLab:
+These are the explicit interfaces between the three parts of Klierly:
 `web/` (Next.js app, owns the database), `worker/` (Python FastAPI: file
 parsing + numerical validation, stateless, no database access) and
 `extension/` (MV3 browser extension).

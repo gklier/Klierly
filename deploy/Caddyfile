@@ -1,4 +1,4 @@
-# HTTPS reverse proxy example for CourseLab. Certificates are obtained automatically for {$DOMAIN}.
+# HTTPS reverse proxy example for Klierly. Certificates are obtained automatically for {$DOMAIN}.
 {$DOMAIN} {
 	encode zstd gzip
 	request_body {

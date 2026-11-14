@@ -28,7 +28,7 @@ export async function POST(req: Request) {
   const signals = body.signals as { assessmentSuspected?: unknown } | undefined;
   const check = assessAssessment({ url, title, text });
   if (check.blocked || signals?.assessmentSuspected === true) {
-    return extError(req, 422, "assessment_blocked", `This page looks like an active assessment or a restricted page${check.reasons.length ? ` (${check.reasons.join("; ")})` : ""}. CourseLab does not import those.`);
+    return extError(req, 422, "assessment_blocked", `This page looks like an active assessment or a restricted page${check.reasons.length ? ` (${check.reasons.join("; ")})` : ""}. Klierly does not import those.`);
   }
   try {
     const r = await createSource({ userId: user.id, courseId: body.courseId, moduleId: uuid(body.moduleId) ? body.moduleId : null, kind: "web", title, filename: "capture.txt", mime: "text/plain", data: Buffer.from(text, "utf8"), originUrl: url });

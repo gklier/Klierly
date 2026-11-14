@@ -12,7 +12,7 @@ function read() {
   const check = normalizeServerUrl($('server').value);
   if (!check.ok) { say(check.error, 'bad'); return null; }
   const token = $('token').value.trim();
-  if (!/^clx_[A-Za-z0-9_-]{20,}$/.test(token)) { say('That does not look like a CourseLab pairing token. It starts with clx_.', 'bad'); return null; }
+  if (!/^clx_[A-Za-z0-9_-]{20,}$/.test(token)) { say('That does not look like a Klierly pairing token. It starts with clx_.', 'bad'); return null; }
   return { serverUrl: check.url, token };
 }
 
@@ -38,5 +38,5 @@ async function test(settings) {
     await test(settings);
   });
   $('test').addEventListener('click', async () => { const settings = read(); if (settings) { say('Testing…'); await test(settings); } });
-  $('disconnect').addEventListener('click', async () => { await clearSettings(); $('token').value = ''; say('Disconnected. The saved token was removed from this browser. Revoke it in CourseLab as well if you no longer need it.'); });
+  $('disconnect').addEventListener('click', async () => { await clearSettings(); $('token').value = ''; say('Disconnected. The saved token was removed from this browser. Revoke it in Klierly as well if you no longer need it.'); });
 })();

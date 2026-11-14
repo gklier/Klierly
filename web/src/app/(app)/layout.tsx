@@ -13,7 +13,7 @@ export default async function AppLayout({ children }: { children: React.ReactNod
       <a href="#main" className="sr-only focus:not-sr-only focus:absolute focus:left-3 focus:top-3 focus:z-50 btn">Skip to content</a>
       <header className="sticky top-0 z-30 border-b border-line backdrop-blur-md" style={{ background: "var(--nav)" }}>
         <div className="mx-auto flex h-14 max-w-6xl items-center gap-1 px-3 sm:px-6">
-          <Link href="/" className="mr-1 text-[1.05rem] font-semibold tracking-tight sm:mr-3" aria-label="CourseLab — your courses">CourseLab</Link>
+          <Link href="/" className="mr-1 text-[1.05rem] font-semibold tracking-tight sm:mr-3" aria-label="Klierly — your courses">Klierly</Link>
           <nav aria-label="Main" className="flex items-center gap-1">
             <Link href="/" className="btn btn-quiet btn-sm max-sm:hidden">Courses</Link>
             <Link href="/settings" className="btn btn-quiet btn-sm">Settings</Link>
