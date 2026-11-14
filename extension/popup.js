@@ -3,6 +3,7 @@ import { ApiError, fetchCourses, importCapture, loadSettings, normalizeServerUrl
 import { cleanText, cleanTitle, formatCount, limitText } from './src/clean.js';
 import { collectSignals, extractVisibleText } from './src/extract.js';
 import { evaluateGuard, restrictedPageReason } from './src/guard.js';
+import { detectCourse } from './src/lms/index.js';
 
 const $ = (id) => document.getElementById(id);
 const FALLBACK = 'You can still add permitted material in Klierly itself: copy the text and use Materials → Paste text, or upload the file.';
@@ -69,6 +70,14 @@ async function init() {
 
   try { tab = await activeTab(); } catch { tab = null; }
   if (!tab?.id) return block('No page to capture', ['The extension could not find the current tab.']);
+  // On a course site, offer course-wide discovery in addition to capturing this one page.
+  if (tab.url && detectCourse(tab.url)) {
+    $('view-discover').hidden = false;
+    $('discover').addEventListener('click', () => {
+      chrome.tabs.create({ url: chrome.runtime.getURL(`discover.html?tabId=${tab.id}&url=${encodeURIComponent(tab.url)}`) });
+      window.close();
+    });
+  }
   const restricted = restrictedPageReason(tab.url);
   if (restricted) return block('This page cannot be captured', [restricted]);
 

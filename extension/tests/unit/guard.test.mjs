@@ -94,9 +94,12 @@ test('shipped manifest asks for the minimum', () => {
   const m = JSON.parse(readFileSync(new URL('../../manifest.json', import.meta.url), 'utf8'));
   assert.equal(m.manifest_version, 3);
   assert.deepEqual([...m.permissions].sort(), ['activeTab', 'scripting', 'storage']);
-  for (const key of ['host_permissions', 'optional_host_permissions', 'optional_permissions', 'content_scripts', 'background', 'web_accessible_resources', 'externally_connectable', 'key']) assert.equal(m[key], undefined, key);
-  const shipped = ['popup.js', 'options.js', 'src/api.js', 'src/extract.js', 'src/guard.js', 'src/clean.js'].map((f) => readFileSync(new URL(`../../${f}`, import.meta.url), 'utf8')).join('\n');
+  // Site access is optional: asked per course site through Chrome's own prompt when discovery starts, never at install.
+  assert.deepEqual(m.optional_host_permissions, ['https://*/*', 'http://localhost/*', 'http://127.0.0.1/*']);
+  for (const key of ['host_permissions', 'optional_permissions', 'content_scripts', 'background', 'web_accessible_resources', 'externally_connectable', 'key']) assert.equal(m[key], undefined, key);
+  const shipped = ['popup.js', 'options.js', 'discover.js', 'src/api.js', 'src/extract.js', 'src/guard.js', 'src/clean.js', 'src/lms/canvas.js', 'src/lms/index.js'].map((f) => readFileSync(new URL(`../../${f}`, import.meta.url), 'utf8')).join('\n');
   assert.doesNotMatch(shipped, /\beval\(|new Function|document\.cookie|chrome\.cookies|chrome\.webRequest|<all_urls>|XMLHttpRequest/);
   assert.doesNotMatch(shipped, /clx_[A-Za-z0-9_-]{20,}|sk-[A-Za-z0-9]{16,}/); // no embedded credentials
-  assert.equal((shipped.match(/fetch\(/g) ?? []).length, 1); // one network call site, in src/api.js
+  assert.equal((shipped.match(/[^\w.]fetch\(/g) ?? []).length, 2); // src/api.js (Klierly server) and the in-page file read in the Canvas adapter
+  assert.doesNotMatch(shipped, /\/api\/v1\/|access_token|Authorization: Bearer/); // no Canvas REST API, no LMS tokens
 });

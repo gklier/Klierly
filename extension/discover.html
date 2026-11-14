@@ -1,0 +1,74 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <title>Klierly — discover course</title>
+  <link rel="stylesheet" href="ui.css">
+</head>
+<body>
+<div class="wide">
+  <h1>Discover this course</h1>
+  <p class="muted" id="intro">Klierly reads the Modules page in your course tab, shows you what it found, and imports only what you select and approve. It opens each selected item in that tab, one at a time, the same way you would by clicking.</p>
+  <div id="fatal" class="notice bad" role="alert" hidden></div>
+
+  <section id="step-access" class="card" hidden>
+    <h2 style="margin-top:0">Allow access to this course site</h2>
+    <p>To move through the course pages you choose, the extension needs your permission for <strong id="access-host"></strong> only. Chrome will ask you to confirm. You can remove it again at any time below or in Chrome's extension settings.</p>
+    <p class="muted small">It does not read passwords, cookies, grades, people lists, quizzes or anything on other sites.</p>
+    <button id="grant" class="primary" type="button">Allow for this site</button>
+  </section>
+
+  <section id="step-scan" class="card" hidden>
+    <div class="inline">
+      <button id="scan" class="primary" type="button">Scan the Modules page</button>
+      <span id="scan-status" class="muted small" role="status"></span>
+    </div>
+    <div id="resume" class="notice warn" hidden>
+      <span id="resume-text"></span>
+      <div class="row"><button id="resume-go" class="primary" type="button">Resume import</button><button id="resume-drop" type="button">Discard it</button></div>
+    </div>
+  </section>
+
+  <section id="step-inventory" hidden>
+    <h2>What Klierly found <span id="found-count" class="muted" style="font-weight:400"></span></h2>
+    <div id="scan-notes" class="notice warn small" hidden></div>
+    <div class="card">
+      <div class="inline">
+        <div><label for="range-from">From module</label><select id="range-from"></select></div>
+        <div><label for="range-to">to module</label><select id="range-to"></select></div>
+        <button id="range-apply" type="button">Select this range</button>
+        <button id="select-new" type="button">Select everything not imported yet</button>
+        <button id="select-none" type="button">Clear</button>
+      </div>
+    </div>
+    <div id="modules"></div>
+
+    <h2>Review and approve</h2>
+    <div class="card">
+      <p id="summary" role="status"></p>
+      <ul id="skip-list" class="muted small"></ul>
+      <label for="target">Import into Klierly course</label>
+      <select id="target"></select>
+      <p class="muted small">Sources are filed under modules with the same names as in this course; missing modules are created. Text and files go to <strong id="server-host"></strong> and nowhere else.</p>
+      <label class="check"><input id="permission" type="checkbox"> <span>I am allowed to use the selected material for my own study, and none of it is a graded assessment or an answer key I may not keep.</span></label>
+      <div id="import-error" class="notice bad small" role="alert" hidden></div>
+      <div class="row"><button id="start" class="primary" type="button" disabled>Import selected</button><span id="start-hint" class="muted small"></span></div>
+    </div>
+  </section>
+
+  <section id="step-run" hidden>
+    <h2>Import progress</h2>
+    <div class="card">
+      <p id="run-status" role="status"></p>
+      <div class="bar" aria-hidden="true"><div id="run-bar" style="width:0"></div></div>
+      <div class="row"><button id="cancel" type="button">Stop</button><a id="open-klierly" target="_blank" rel="noopener" hidden>Open the course in Klierly</a><button id="refresh-status" type="button" hidden>Check processing status</button></div>
+      <p class="muted small">Keep the course tab open while this runs. You can stop at any time; finished items stay imported and you can resume later.</p>
+    </div>
+    <ul id="run-list" class="module" style="list-style:none;padding:0"></ul>
+  </section>
+
+  <p class="muted small" style="margin-top:28px">Not affiliated with or endorsed by Canvas, Instructure or any university. This is not an official LMS integration. <a href="#" id="revoke" hidden>Remove this site's access</a></p>
+</div>
+<script type="module" src="discover.js"></script>
+</body>
+</html>

@@ -19,7 +19,24 @@ export class IngestError extends Error {
 type NewSource = {
   userId: string; courseId: string; moduleId: string | null; kind: "file" | "paste" | "web";
   title: string; filename: string; mime: string | null; data: Buffer; originUrl: string | null;
+  /** Stable id of this resource in the system it came from (course sync). */
+  externalId?: string | null; externalUpdatedAt?: string | null;
+  /** Module to file the source under, by name; created if the course does not have it yet. */
+  moduleName?: string | null;
 };
+export type SourceOutcome = "created" | "unchanged" | "updated";
+
+const normName = (s: string) => s.toLowerCase().replace(/[^a-z0-9]+/g, " ").trim();
+
+async function findOrCreateModule(userId: string, courseId: string, name: string): Promise<string | null> {
+  const clean = name.replace(/\s+/g, " ").trim().slice(0, 120);
+  if (clean.length < 2) return null;
+  const mods = await db.select().from(schema.modules).where(and(eq(schema.modules.courseId, courseId), eq(schema.modules.userId, userId)));
+  const hit = mods.find((m) => normName(m.name) === normName(clean));
+  if (hit) return hit.id;
+  const [row] = await db.insert(schema.modules).values({ userId, courseId, name: clean, position: Math.max(0, ...mods.map((m) => m.position)) + 1 }).returning({ id: schema.modules.id });
+  return row.id;
+}
 
 async function assertOwnership(userId: string, courseId: string, moduleId: string | null) {
   const [course] = await db.select({ id: schema.courses.id }).from(schema.courses)
@@ -38,8 +55,9 @@ async function assertOwnership(userId: string, courseId: string, moduleId: strin
  * ImportJob. Returns the existing document when the same content was already
  * imported into the course.
  */
-export async function createSource(input: NewSource): Promise<{ documentId: string; jobId: string | null; duplicate: boolean }> {
+export async function createSource(input: NewSource): Promise<{ documentId: string; jobId: string | null; duplicate: boolean; outcome: SourceOutcome }> {
   await assertOwnership(input.userId, input.courseId, input.moduleId);
+  const externalId = input.externalId?.slice(0, 300) || null;
   const ext = path.extname(input.filename).toLowerCase();
   if (!SUPPORTED_EXTENSIONS.includes(ext)) {
     throw new IngestError("unsupported_type", `Files of type "${ext || "unknown"}" are not supported. Supported: ${SUPPORTED_EXTENSIONS.join(" ")}.`, 415);
@@ -48,7 +66,17 @@ export async function createSource(input: NewSource): Promise<{ documentId: stri
   const digest = sha256(input.data);
   const [existing] = await db.select({ id: schema.sourceDocuments.id }).from(schema.sourceDocuments)
     .where(and(eq(schema.sourceDocuments.courseId, input.courseId), eq(schema.sourceDocuments.sha256, digest))).limit(1);
-  if (existing) return { documentId: existing.id, jobId: null, duplicate: true };
+  if (existing) {
+    // Same content as before: nothing to re-import. Remember where it came from so a later sync recognises it.
+    if (externalId) await db.update(schema.sourceDocuments).set({ externalId, externalUpdatedAt: input.externalUpdatedAt ?? null }).where(eq(schema.sourceDocuments.id, existing.id));
+    return { documentId: existing.id, jobId: null, duplicate: true, outcome: "unchanged" };
+  }
+  // Same resource, different content: the new version replaces the old one once it is stored.
+  const [previous] = externalId
+    ? await db.select({ id: schema.sourceDocuments.id, moduleId: schema.sourceDocuments.moduleId }).from(schema.sourceDocuments)
+        .where(and(eq(schema.sourceDocuments.courseId, input.courseId), eq(schema.sourceDocuments.userId, input.userId), eq(schema.sourceDocuments.externalId, externalId))).limit(1)
+    : [];
+  const moduleId = input.moduleId ?? previous?.moduleId ?? (input.moduleName ? await findOrCreateModule(input.userId, input.courseId, input.moduleName) : null);
 
   const documentId = crypto.randomUUID();
   const storagePath = storagePathFor(input.userId, documentId, ext);
@@ -56,7 +84,7 @@ export async function createSource(input: NewSource): Promise<{ documentId: stri
   try {
     const jobId = await db.transaction(async (tx) => {
       await tx.insert(schema.sourceDocuments).values({
-        id: documentId, userId: input.userId, courseId: input.courseId, moduleId: input.moduleId,
+        id: documentId, userId: input.userId, courseId: input.courseId, moduleId, externalId, externalUpdatedAt: input.externalUpdatedAt ?? null,
         title: input.title.trim().slice(0, 200) || input.filename, kind: input.kind, filename: input.filename.slice(0, 200),
         mime: input.mime, sizeBytes: input.data.length, sha256: digest, storagePath, originUrl: input.originUrl,
         permissionDeclaredAt: new Date(),
@@ -67,14 +95,15 @@ export async function createSource(input: NewSource): Promise<{ documentId: stri
       }).returning({ id: schema.importJobs.id });
       return job.id;
     });
+    if (previous) await deleteDocument(input.userId, previous.id);
     kickJobs();
-    return { documentId, jobId, duplicate: false };
+    return { documentId, jobId, duplicate: false, outcome: previous ? "updated" : "created" };
   } catch (e) {
     await removeFile(storagePath);
     if ((e as { code?: string }).code === "23505") {
       const [dup] = await db.select({ id: schema.sourceDocuments.id }).from(schema.sourceDocuments)
         .where(and(eq(schema.sourceDocuments.courseId, input.courseId), eq(schema.sourceDocuments.sha256, digest))).limit(1);
-      if (dup) return { documentId: dup.id, jobId: null, duplicate: true };
+      if (dup) return { documentId: dup.id, jobId: null, duplicate: true, outcome: "unchanged" };
     }
     throw e;
   }

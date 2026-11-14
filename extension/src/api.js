@@ -119,3 +119,17 @@ export function safeHttpUrl(value) {
     return null;
   }
 }
+
+/** GET /api/ext/courses/:id/sources — what was already imported from a course site (ids and status only). */
+export async function fetchSources(settings, courseId) {
+  const body = await request(settings, `/api/ext/courses/${encodeURIComponent(courseId)}/sources`);
+  return Array.isArray(body.sources) ? body.sources : [];
+}
+
+/** POST /api/ext/import-file — one course file the student selected and approved. */
+export async function importFile(settings, fields, blob, filename) {
+  const form = new FormData();
+  for (const [k, v] of Object.entries(fields)) if (v != null) form.set(k, String(v));
+  form.set('file', blob, filename);
+  return request(settings, '/api/ext/import-file', { method: 'POST', body: form });
+}
