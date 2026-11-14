@@ -7,7 +7,7 @@ import { AiError, chatJson } from "./provider";
 import { learnSystemPrompt, learnUserPrompt, questionSystemPrompt, questionUserPrompt, renderSources } from "./prompt";
 import { generationSchema, isDuplicate, learnSchema, resolveCitations, shuffleChoices, validateQuestion } from "./validate";
 
-export type TopicResult = { topicId: string; topicName: string; added: number; rejected: string[]; insufficient: string | null };
+export type TopicResult = { topicId: string; topicName: string; added: number; rejected: string[]; insufficient: string | null; /** Set when generation had to stop here (limit reached, provider error). Earlier topics keep their questions. */ stopped?: string };
 
 async function loadCourse(userId: string, courseId: string) {
   const [course] = await db.select().from(schema.courses).where(and(eq(schema.courses.id, courseId), eq(schema.courses.userId, userId))).limit(1);
@@ -47,7 +47,15 @@ export async function generateQuestions(opts: { userId: string; courseId: string
     for (let round = 0; round < (opts.maxRounds ?? 2) && result.added < opts.perTopic; round++) {
       const need = opts.perTopic - result.added;
       // Routine (cheaper) model first; a retry after rejected drafts is the one place a stronger model is justified.
-      const out = await chatJson(opts.userId, "questions", system, questionUserPrompt({ courseName: course.name, topicName: topic.name, count: need, sources, avoid, feedback }), { tier: round === 0 ? "routine" : "strong" });
+      let out: unknown;
+      try {
+        out = await chatJson(opts.userId, "questions", system, questionUserPrompt({ courseName: course.name, topicName: topic.name, count: need, sources, avoid, feedback }), { tier: round === 0 ? "routine" : "strong" });
+      } catch (e) {
+        // Nothing saved yet at all: surface the error. Otherwise keep what was added and say why it stopped.
+        if (!(e instanceof AiError) || results.every((r) => r.added === 0)) throw e;
+        result.stopped = e.message;
+        return results;
+      }
       const parsed = generationSchema.safeParse(out);
       if (!parsed.success) { feedback = ["The response was not the required JSON object."]; result.rejected.push(feedback[0]); continue; }
       if (parsed.data.insufficient && !parsed.data.questions.length) {

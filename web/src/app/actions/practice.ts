@@ -10,6 +10,7 @@ import { generateLearnNote, generateQuestions } from "@/lib/ai/generate";
 import { AiError } from "@/lib/ai/provider";
 import { requireUser } from "@/lib/auth";
 import { ownsCourse } from "@/lib/courses";
+import { buildBlueprint } from "@/lib/practice/blueprint";
 import { finishSession, getHint, reportQuestion, startSession, submitAnswer, tagError, type AnswerResult, type Mode } from "@/lib/practice/service";
 import { WorkerError } from "@/lib/worker";
 
@@ -82,6 +83,8 @@ export async function generateAction(_: ActionState, fd: FormData): Promise<Acti
     const parts = [`Added ${added} new ${added === 1 ? "question" : "questions"}.`];
     if (rejected) parts.push(`${rejected} AI ${rejected === 1 ? "draft was" : "drafts were"} discarded by the checks (wrong calculation, missing source, duplicate or ambiguous answer).`);
     if (short.length) parts.push(`Not enough source material for: ${short.map((r) => `${r.topicName} (${r.insufficient})`).join("; ")}`);
+    const stopped = results.find((r) => r.stopped)?.stopped;
+    if (stopped) parts.push(`Stopped early: ${stopped}`);
     return added ? { ok: parts.join(" ") } : { error: parts.join(" ") };
   } catch (e) {
     return { error: aiMessage(e) };
@@ -99,6 +102,53 @@ export async function generateNoteAction(_: ActionState, fd: FormData): Promise<
     revalidatePath(`/courses/${courseId}/practice/learn/${topicId}`);
     return r.ok ? { ok: "Study note created from your materials." } : { error: r.reason };
   } catch (e) {
+    return { error: aiMessage(e) };
+  }
+}
+
+/** Start a timed exam whose topic mix follows the practice blueprint. */
+export async function startBlueprintExam(_: ActionState, fd: FormData): Promise<ActionState> {
+  const user = await requireUser();
+  const courseId = String(fd.get("courseId") ?? "");
+  if (!(await ownsCourse(user.id, courseId))) return { error: "That course was not found." };
+  const bp = await buildBlueprint(user.id, courseId);
+  const available = bp.rows.reduce((n, r) => n + r.available, 0);
+  if (available < 3) return { error: "There are not enough questions for a mock exam yet. Generate questions first." };
+  const r = await startSession({ userId: user.id, courseId, mode: "exam", count: Math.min(bp.total, available), minutes: bp.minutes, topicIds: bp.rows.map((x) => x.id), quota: new Map(bp.rows.map((x) => [x.id, x.target])) });
+  if (!r.ok) return { error: r.message };
+  redirect(`/courses/${courseId}/practice/${r.sessionId}`);
+}
+
+/** Generate just the questions the blueprint is missing (at most 8 topics and 5 questions per topic per click). */
+export async function fillBlueprint(_: ActionState, fd: FormData): Promise<ActionState> {
+  const user = await requireUser();
+  const courseId = String(fd.get("courseId") ?? "");
+  if (!(await ownsCourse(user.id, courseId))) return { error: "That course was not found." };
+  const short = (await buildBlueprint(user.id, courseId)).rows.filter((r) => r.shortfall > 0).sort((a, b) => b.shortfall - a.shortfall).slice(0, 8);
+  if (!short.length) return { ok: "The question bank already covers this blueprint." };
+  try {
+    let added = 0, rejected = 0; const thin: string[] = [];
+    // Topics need different numbers of questions, so each gets its own request size.
+    let stopped: string | null = null;
+    for (const row of short) {
+      try {
+        const [res] = await generateQuestions({ userId: user.id, courseId, topicIds: [row.id], perTopic: Math.min(5, row.shortfall) });
+        added += res?.added ?? 0; rejected += res?.rejected.length ?? 0;
+        if (res?.insufficient) thin.push(`${row.name} (${res.insufficient})`);
+        if (res?.stopped) { stopped = res.stopped; break; }
+      } catch (e) {
+        if (added === 0) throw e; // nothing achieved: report the failure itself
+        stopped = aiMessage(e); break;
+      }
+    }
+    revalidatePath(`/courses/${courseId}`, "layout");
+    const parts = [`Added ${added} ${added === 1 ? "question" : "questions"} toward the blueprint.`];
+    if (rejected) parts.push(`${rejected} AI ${rejected === 1 ? "draft was" : "drafts were"} discarded by the checks.`);
+    if (thin.length) parts.push(`Not enough source material for: ${thin.join("; ")}`);
+    if (stopped) parts.push(`Stopped early: ${stopped}`);
+    return added ? { ok: parts.join(" ") } : { error: parts.join(" ") };
+  } catch (e) {
+    revalidatePath(`/courses/${courseId}`, "layout");
     return { error: aiMessage(e) };
   }
 }

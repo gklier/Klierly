@@ -36,7 +36,9 @@ export function questionSystemPrompt(fns: NumericFunction[]): string {
 
 ${GUARD}
 
-Write questions that test understanding and application (interpreting output, choosing a method, computing a value), not recall of wording. Never copy a question that appears in the sources; write new ones. Do not ask about the sources themselves ("according to the notes…").
+Write questions that test understanding and application (interpreting output, choosing a method, computing a value), not recall of wording.
+When the sources contain statistical output or formulas (parameter estimates with standard errors, t ratios and p-values; R-square and adjusted R-square; analysis-of-variance tables; model-comparison criteria; forecasts and forecast-error measures), prefer questions that make the student read or use that output: copy the exact numbers needed from the source into the stem, ask for one interpretation or one computed value, and attach a "check" whenever a number is the answer. Interpret coefficients as the sources do (for example "holding the other predictors fixed") and never assert causation the sources do not state.
+Anything you add that the sources do not say — background, a rule of thumb, an extra example — makes the question "extrapolated", and the explanation must say which part comes from the sources and which is supplemental. Never copy a question that appears in the sources; write new ones. Do not ask about the sources themselves ("according to the notes…").
 
 Return ONE JSON object and nothing else:
 {

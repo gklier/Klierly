@@ -98,6 +98,7 @@ export default async function PracticePage({ params }: { params: Promise<{ cours
                 <Submit disabled={total < 3} pendingText="Starting…">Start exam</Submit>
               </div>
               {total < 3 && <p className="help">A mock exam needs at least 3 questions.</p>}
+              <p className="mt-3 text-sm"><Link className="link" href={`${base}/blueprint`}>Use the exam blueprint</Link> <span className="text-muted">to weight topics by your materials and see which questions are still missing.</span></p>
               {withQuestions.length > 1 && <TopicPicker topics={withQuestions} note="leave empty for all topics" />}
             </ActionForm>
           </section>

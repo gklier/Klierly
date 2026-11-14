@@ -3,7 +3,8 @@ import { chunkSegments, splitText } from "@/lib/ingest/chunk";
 import { parseDateInLine, parseModulesCovered, proposeFromChunks, moduleNumberOf } from "@/lib/ingest/proposals";
 import { assessAssessment } from "@/lib/ingest/guard";
 import { evaluate, formatNumber } from "@/lib/calc";
-import { grade, mulberry32, nextMastery, parseNumericInput, pickQuestions, readiness, type PoolQuestion, type TopicState } from "@/lib/practice/core";
+import { grade, mulberry32, nextMastery, parseNumericInput, pickByQuota, pickQuestions, readiness, type PoolQuestion, type TopicState } from "@/lib/practice/core";
+import { allocate } from "@/lib/practice/blueprint";
 import { buildSchedule, type PlanTopic } from "@/lib/plan/schedule";
 import { addDays } from "@/lib/dates";
 import { redact } from "@/lib/log";
@@ -171,6 +172,42 @@ describe("mastery and adaptivity", () => {
     const r = readiness([{ score: 1, attempts: 2 }, { score: null, attempts: 0 }]);
     expect(r.value).toBe(20); expect(r.enoughData).toBe(false);
     expect(readiness([{ score: 0.8, attempts: 10 }, { score: 0.6, attempts: 10 }])).toMatchObject({ value: 70, enoughData: true });
+  });
+});
+
+describe("exam blueprint", () => {
+  const sum = (m: Map<string, number>) => [...m.values()].reduce((a, b) => a + b, 0);
+  it("always allocates exactly the total, gives every topic at least one, and favours better-covered topics", () => {
+    const topics = [{ id: "a", excerpts: 16 }, { id: "b", excerpts: 4 }, { id: "c", excerpts: 1 }, { id: "d", excerpts: 1 }];
+    for (const total of [4, 7, 10, 20, 33, 50]) {
+      const m = allocate(topics, total);
+      expect(sum(m)).toBe(total);
+      expect([...m.values()].every((n) => n >= 1)).toBe(true);
+      expect(m.get("a")!).toBeGreaterThanOrEqual(m.get("b")!);
+      expect(m.get("b")!).toBeGreaterThanOrEqual(m.get("c")!);
+    }
+    const m = allocate(topics, 20);
+    expect(m.get("a")!).toBeLessThan(12); // damped: one long document does not take everything
+    expect(m.get("c")).toBe(m.get("d"));
+  });
+  it("handles fewer questions than topics, equal coverage and empty input", () => {
+    const few = allocate([{ id: "a", excerpts: 9 }, { id: "b", excerpts: 1 }, { id: "c", excerpts: 4 }], 2);
+    expect(Object.fromEntries(few)).toEqual({ a: 1, b: 0, c: 1 });
+    expect(Object.fromEntries(allocate([{ id: "a", excerpts: 3 }, { id: "b", excerpts: 3 }, { id: "c", excerpts: 3 }], 10))).toEqual({ a: 4, b: 3, c: 3 });
+    expect(allocate([], 10).size).toBe(0);
+    expect(sum(allocate([{ id: "a", excerpts: 1 }], 0))).toBe(0);
+  });
+  it("builds an exam to the quota, unseen first, and tops up when a topic's bank is short", () => {
+    const q = (id: string, topicId: string, seen = false): PoolQuestion => ({ id, topicId, timesSeen: seen ? 1 : 0, lastAnsweredAt: seen ? 1 : null, lastCorrect: seen ? true : null });
+    const pool = [q("a1", "a", true), q("a2", "a"), q("a3", "a"), q("b1", "b"), q("c1", "c"), q("c2", "c"), q("c3", "c")];
+    const ids = pickByQuota(pool, new Map([["a", 2], ["b", 3], ["c", 1]]), 6, mulberry32(3));
+    expect(ids).toHaveLength(6);
+    expect(new Set(ids).size).toBe(6);
+    expect(ids).toEqual(expect.arrayContaining(["a2", "a3", "b1"])); // unseen a's, and all of b that exists
+    expect(ids).not.toContain("a1"); // the seen question is the last resort
+    expect(ids.filter((i) => i.startsWith("c"))).toHaveLength(3); // b was short by 2 → topped up from c
+    expect(pickByQuota(pool, new Map([["a", 1]]), 3, mulberry32(1))).toHaveLength(3);
+    expect(pickByQuota(pool, new Map(), 50, mulberry32(1))).toHaveLength(7);
   });
 });
 

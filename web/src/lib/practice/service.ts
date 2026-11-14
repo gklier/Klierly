@@ -3,12 +3,12 @@ import { db, schema } from "@/db";
 import type { AnswerResponse, ErrorReason } from "@/db/schema";
 import { ERROR_REASONS } from "@/db/schema";
 import { expandCitations, type CitationView } from "@/lib/citations";
-import { grade, mulberry32, nextMastery, pickQuestions, type PoolQuestion, type TopicState } from "./core";
+import { grade, mulberry32, nextMastery, pickByQuota, pickQuestions, type PoolQuestion, type TopicState } from "./core";
 
 export type Mode = "drill" | "exam" | "review";
 type QuestionRow = typeof schema.questions.$inferSelect;
 
-export type PublicQuestion = { id: string; type: "mcq" | "numeric"; stem: string; choices: string[] | null; unit: string | null; hasHint: boolean; topicName: string | null; difficulty: number };
+export type PublicQuestion = { id: string; type: "mcq" | "numeric"; stem: string; choices: string[] | null; unit: string | null; hasHint: boolean; topicId: string | null; topicName: string | null; difficulty: number };
 export type Feedback = {
   answerId: string; isCorrect: boolean; correctIndex: number | null; correctValue: string | null; unit: string | null; explanation: string;
   citations: CitationView[]; grounding: "direct" | "extrapolated"; correctnessConfidence: string; explanationConfidence: string; origin: "ai" | "sample";
@@ -19,7 +19,7 @@ const displayValue = (v: string | null) => (v === null ? null : String(Number(Nu
 
 /** What the browser may see before answering: never the answer, explanation or hint text. */
 const toPublic = (q: QuestionRow, topicName: string | null): PublicQuestion =>
-  ({ id: q.id, type: q.type, stem: q.stem, choices: q.choices, unit: q.unit, hasHint: Boolean(q.hint), topicName, difficulty: q.difficulty });
+  ({ id: q.id, type: q.type, stem: q.stem, choices: q.choices, unit: q.unit, hasHint: Boolean(q.hint), topicId: q.topicId, topicName, difficulty: q.difficulty });
 
 async function feedbackFor(q: QuestionRow, a: { id: string; isCorrect: boolean | null; errorReason: ErrorReason | null }): Promise<Feedback> {
   const [citations] = await expandCitations([q.citations]);
@@ -47,11 +47,14 @@ export async function masteryMap(userId: string, courseId: string): Promise<Map<
   return new Map(rows.map((r) => [r.topicId, { score: r.score, attempts: r.attempts, nextReviewAt: r.nextReviewAt.getTime() }]));
 }
 
-export async function startSession(opts: { userId: string; courseId: string; mode: Mode; count: number; topicIds?: string[]; minutes?: number; planSessionId?: string | null; seed?: number }):
+export async function startSession(opts: { userId: string; courseId: string; mode: Mode; count: number; topicIds?: string[]; minutes?: number; planSessionId?: string | null; seed?: number; quota?: Map<string, number> }):
   Promise<{ ok: true; sessionId: string } | { ok: false; message: string }> {
   const pool = await questionPool(opts.userId, opts.courseId, opts.topicIds);
   const count = Math.min(Math.max(1, opts.count), 60);
-  const ids = pickQuestions(pool, await masteryMap(opts.userId, opts.courseId), opts.mode, count, mulberry32(opts.seed ?? Date.now()), Date.now());
+  const rng = mulberry32(opts.seed ?? Date.now());
+  const ids = opts.quota && opts.mode === "exam"
+    ? pickByQuota(pool, opts.quota, count, rng)
+    : pickQuestions(pool, await masteryMap(opts.userId, opts.courseId), opts.mode, count, rng, Date.now());
   if (!ids.length) {
     return { ok: false, message: opts.mode === "review"
       ? "Nothing to review yet. Missed questions and topics that are due for spaced review appear here."

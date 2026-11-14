@@ -161,8 +161,8 @@ export async function chatJson(userId: string, purpose: string, system: string, 
     }
   }
   if (!status.available) throw new AiError("limit_reached", status.reason ?? "The AI allowance is used up.");
-  // One Generate click over 8 topics makes up to 16 calls (first attempt + one retry each), so the burst limit sits above that.
-  const rl = rateLimit(`ai:${userId}`, 24, 60_000);
+  // One Generate click over 8 topics makes up to 16 calls (first attempt + one retry each), so the burst limit leaves room for two such clicks a minute. Daily and monthly quotas do the real limiting.
+  const rl = rateLimit(`ai:${userId}`, 40, 60_000);
   if (!rl.ok) throw new AiError("rate_limited", `Too many AI requests at once. Try again in ${rl.retryAfterSec}s.`);
   // Cap the response size on the managed provider so one request cannot burn the shared budget.
   const maxTokens = status.kind === "managed" ? Math.min(opts.maxTokens ?? 3000, 3000) : opts.maxTokens;

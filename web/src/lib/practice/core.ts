@@ -133,6 +133,27 @@ export function pickQuestions(pool: PoolQuestion[], topics: Map<string, TopicSta
   return picked;
 }
 
+/**
+ * Exam built to a blueprint: up to `quota[topic]` questions per topic (unseen
+ * first), then topped up from whatever is left so the exam still reaches
+ * `count` when a topic's bank is short. Order is shuffled.
+ */
+export function pickByQuota(pool: PoolQuestion[], quota: Map<string, number>, count: number, rng: () => number): string[] {
+  const byTopic = new Map<string, PoolQuestion[]>();
+  for (const q of pool) { const k = q.topicId ?? NONE; if (!byTopic.has(k)) byTopic.set(k, []); byTopic.get(k)!.push(q); }
+  const picked: PoolQuestion[] = [];
+  const rest: PoolQuestion[] = [];
+  for (const [topic, list] of byTopic) {
+    list.sort(byPriority);
+    const n = Math.min(quota.get(topic) ?? 0, list.length);
+    picked.push(...list.slice(0, n));
+    rest.push(...list.slice(n));
+  }
+  rest.sort(byPriority);
+  const all = [...picked.slice(0, count), ...rest.slice(0, Math.max(0, count - picked.length))];
+  return all.map((q) => [rng(), q.id] as const).sort((a, b) => a[0] - b[0]).map(([, id]) => id);
+}
+
 export type ReadinessTopic = { score: number | null; attempts: number };
 
 /**

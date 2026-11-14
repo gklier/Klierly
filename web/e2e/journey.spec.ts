@@ -128,11 +128,11 @@ test("6. search opens the exact excerpt with its page number", async () => {
 test("7. zero configuration: AI is included and no key is asked for; usage is visible", async () => {
   await page.goto(`${courseUrl}/practice`);
   await expect(page.getByTestId("ai-usage")).toContainText("Klierly AI is included — no key needed.");
-  await expect(page.getByTestId("ai-usage")).toContainText("0 of 40 free requests used today");
+  await expect(page.getByTestId("ai-usage")).toContainText("0 of 150 free requests used today");
   await expect(page.getByRole("button", { name: "Start drill" })).toBeDisabled(); // no questions yet
   await page.goto("/settings");
   await expect(page.getByTestId("managed-ai")).toContainText("Klierly AI is included");
-  await expect(page.getByTestId("managed-ai")).toContainText("0 of 40");
+  await expect(page.getByTestId("managed-ai")).toContainText("0 of 150");
   expect(await page.content()).not.toContain("test-key"); // server-side credential never reaches the browser
 });
 
@@ -161,7 +161,7 @@ test("8. generate source-grounded questions and a study note without entering a 
   // Usage feedback for the student, and cost monitoring for the operator.
   await page.goto(`${courseUrl}/practice`);
   const usedText = await page.getByTestId("ai-usage").innerText();
-  const used = Number(/(\d+) of 40 free requests/.exec(usedText)?.[1]);
+  const used = Number(/(\d+) of 150 free requests/.exec(usedText)?.[1]);
   expect(used).toBeGreaterThanOrEqual(6);
   await page.goto("/admin");
   await expect(page.getByRole("heading", { name: "Operator: managed AI" })).toBeVisible();
@@ -270,6 +270,41 @@ test("10. drill: scored feedback with explanations and source references; progre
   await expect(page.getByRole("cell", { name: /^\d+\/\d+$/ }).first()).toBeVisible();
 });
 
+test("10b. exam blueprint: topic weights from the materials, gaps filled, exam built to it, targeted follow-up", async () => {
+  await page.goto(`${courseUrl}/practice`);
+  await page.getByRole("link", { name: "Use the exam blueprint" }).click();
+  await expect(page.getByRole("heading", { name: "Practice exam blueprint" })).toBeVisible();
+  await expect(page.getByText("It is a study aid, not your instructor's exam design.")).toBeVisible();
+  await expect(page.getByText("The real exam format is not confirmed")).toBeVisible();
+  const total = Number(await page.getByTestId("bp-total").innerText());
+  const planned = (await page.locator("tbody tr td:nth-child(3)").allInnerTexts()).map(Number);
+  expect(planned.reduce((a, b) => a + b, 0)).toBe(total);
+  expect(planned.every((n) => n >= 1)).toBe(true);
+  await expect(page.getByText(/Moving averages|Exponential smoothing/)).toHaveCount(0); // plan scope: Module 4 is not in this exam
+  const missingBefore = Number(await page.getByTestId("bp-missing").innerText());
+  expect(missingBefore).toBeGreaterThan(0);
+  await page.getByRole("button", { name: "Generate the missing questions" }).click();
+  await expect(page.locator(".notice-good", { hasText: "toward the blueprint" })).toBeVisible({ timeout: 90_000 });
+  expect(Number(await page.getByTestId("bp-missing").innerText())).toBeLessThan(missingBefore);
+
+  await page.getByRole("button", { name: "Start the blueprint exam" }).click();
+  await expect(page.getByRole("timer")).toBeVisible();
+  const n = Number(/of (\d+)/.exec(await page.getByText(/^Question 1 of \d+/).innerText())![1]);
+  expect(n).toBeGreaterThanOrEqual(8);
+  for (let i = 0; i < 3; i++) { await answerCurrent(page); await page.getByTestId("primary").click(); }
+  await page.getByRole("button", { name: "Submit exam" }).click();
+  await page.getByTestId("confirm-submit").click();
+  await expect(page.getByRole("heading", { name: "Mock exam results" })).toBeVisible();
+  await expect(page.getByRole("heading", { name: "What to practise next" })).toBeVisible();
+  // Weaknesses → targeted follow-up: fresh questions on the weak topics, then a drill on exactly those topics.
+  await page.getByRole("button", { name: "Generate fresh questions on these topics" }).click();
+  await expect(page.locator(".notice", { hasText: /Added \d+ new question|discarded by the checks|Not enough source material/ })).toBeVisible({ timeout: 90_000 });
+  await page.getByRole("button", { name: "Drill these topics" }).click();
+  await expect(page.getByTestId("practice-runner")).toBeVisible();
+  await expect(page.getByText("Drill", { exact: true })).toBeVisible();
+  await page.getByRole("link", { name: "Exit" }).click();
+});
+
 test("11. timed mock exam grades only after submission", async () => {
   await page.goto(`${courseUrl}/practice`);
   const exam = page.getByRole("region", { name: "Timed mock exam" });
@@ -298,7 +333,7 @@ test("11. timed mock exam grades only after submission", async () => {
   await expect(page.getByTestId("practice-runner")).toBeVisible();
   await expect(page.getByText("Review mistakes", { exact: true })).toBeVisible();
   await page.getByRole("link", { name: "Exit" }).click();
-  await expect(page.getByText("In progress")).toBeVisible();
+  await expect(page.getByText("In progress").first()).toBeVisible();
 });
 
 test("12. report a bad question; calculator works", async () => {

@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
-import { startPractice } from "@/app/actions/practice";
+import { generateAction, startPractice } from "@/app/actions/practice";
+import { aiStatus } from "@/lib/ai/provider";
 import { CitationList } from "@/components/citations";
 import { ActionForm, Submit } from "@/components/forms";
 import { Icon } from "@/components/icons";
@@ -26,14 +27,16 @@ export default async function SessionPage({ params }: { params: Promise<{ course
   const correct = view.correctCount ?? 0;
   const totalMs = Object.values(view.answers).reduce((n, a) => n + a.timeMs, 0);
   const denominator = view.mode === "exam" ? total : answered.length;
-  const byTopic = new Map<string, { right: number; n: number }>();
+  const byTopic = new Map<string, { right: number; n: number; id: string | null }>();
   for (const q of answered) {
     const k = q.topicName ?? "Other";
-    const e = byTopic.get(k) ?? { right: 0, n: 0 };
+    const e = byTopic.get(k) ?? { right: 0, n: 0, id: q.topicId };
     e.n++; if (view.answers[q.id].feedback!.isCorrect) e.right++;
     byTopic.set(k, e);
   }
   const weak = [...byTopic.entries()].filter(([, v]) => v.right < v.n).sort((a, b) => a[1].right / a[1].n - b[1].right / b[1].n);
+  const weakIds = weak.map(([, v]) => v.id).filter((id): id is string => Boolean(id)).slice(0, 8);
+  const ai = weakIds.length ? await aiStatus(user.id) : null;
   const title = { drill: "Drill results", exam: "Mock exam results", review: "Review results" }[view.mode];
 
   return (
@@ -57,10 +60,27 @@ export default async function SessionPage({ params }: { params: Promise<{ course
             <ul className="mt-2 space-y-1 text-sm">
               {weak.slice(0, 4).map(([name, v]) => <li key={name}><strong>{name}</strong> — {v.right}/{v.n} correct in this session</li>)}
             </ul>
-            <ActionForm action={startPractice} className="mt-3">
-              <input type="hidden" name="courseId" value={course.id} /><input type="hidden" name="mode" value="review" /><input type="hidden" name="count" value="10" />
-              <Submit className="btn" pendingText="Starting…">Retry the questions I missed</Submit>
-            </ActionForm>
+            <div className="mt-3 flex flex-wrap items-start gap-2">
+              <ActionForm action={startPractice}>
+                <input type="hidden" name="courseId" value={course.id} /><input type="hidden" name="mode" value="review" /><input type="hidden" name="count" value="10" />
+                <Submit className="btn" pendingText="Starting…">Retry the questions I missed</Submit>
+              </ActionForm>
+              {weakIds.length > 0 && (
+                <ActionForm action={startPractice}>
+                  <input type="hidden" name="courseId" value={course.id} /><input type="hidden" name="mode" value="drill" /><input type="hidden" name="count" value="8" />
+                  {weakIds.map((id) => <input key={id} type="hidden" name="topicIds" value={id} />)}
+                  <Submit className="btn" pendingText="Starting…">Drill these topics</Submit>
+                </ActionForm>
+              )}
+            </div>
+            {weakIds.length > 0 && ai?.kind && ai.available && course.allowExternalAi && (
+              <ActionForm action={generateAction} className="mt-3">
+                <input type="hidden" name="courseId" value={course.id} /><input type="hidden" name="perTopic" value="3" />
+                {weakIds.map((id) => <input key={id} type="hidden" name="topicIds" value={id} />)}
+                <Submit className="btn" pendingText="Writing new questions on your weak topics…">Generate fresh questions on these topics</Submit>
+                <p className="help">New questions, written from your materials on the topics above, so follow-up practice is not a repeat of what you just saw.</p>
+              </ActionForm>
+            )}
           </>
         )}
       </section>
