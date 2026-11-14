@@ -15,6 +15,7 @@ Run on 2026-11-14 in a Linux x86_64 container: Node 22, Python 3.13, PostgreSQL 
 | `cd extension && npm test` | **14 passed** |
 | `npm audit --omit=dev` (web) · `pip-audit` (worker, Phase 1) | 0 vulnerabilities · none known |
 | `docker compose config` | valid (syntax only) |
+| GitHub Actions on a clean runner (fresh install from the lockfiles) | all 4 jobs pass |
 
 Stability: the full E2E suite was run 11 times after the last test fix: 10 clean. **One run
 reported an unexplained browser console error** in the journey suite; it did not reproduce in 7
@@ -32,7 +33,7 @@ further runs and its text was not captured. Treat as an open flake.
 | Structure-preserving capture, topic quality | unit "topic headings (from a real course report)" uses the founder's reported cases; integration: AI topic suggestions drop a bare label, an invented subject and an uncited one, supersede heading guesses, apply nothing without review |
 | Exam blueprint and follow-up | unit (allocation sums, floors, damping; quota selection with top-up); E2E 10b: scope follows the plan, gaps generated, exam built to it, results offer a weak-topic drill and fresh questions |
 | Partial-result handling | found by E2E: two quick generations hit the burst limit and lost finished work; generation now keeps what was saved and reports why it stopped |
-| CI | workflow written and YAML-validated; its secret/upload checks pass locally |
+| CI | ran on GitHub for pull request #1: worker, extension, web (types, lint, audit, integration, end-to-end) and the no-secrets check all pass. The first run exposed a broken secrets-check script (fixed); the check is proven to fail on a planted key |
 
 ## Not verified — read this before relying on anything
 
@@ -50,7 +51,6 @@ further runs and its text was not captured. Treat as an open flake.
    sources and arithmetic only.
 4. **Institutional permission** to use the extension on a university course site: not checked with UF.
 5. **Docker / Oracle ARM64.** No Docker daemon available: images never built or started.
-6. **CI on GitHub.** The workflow has not run yet; it will on the pull request.
-7. **Video platforms.** Only standard HTML text tracks and visible transcript panels are read.
+6. **Video platforms.** Only standard HTML text tracks and visible transcript panels are read.
    Whether QMB 3250's player exposes either is unknown.
-8. Edge and Firefox untested. No screen-reader or load testing.
+7. Edge and Firefox untested. No screen-reader or load testing.
