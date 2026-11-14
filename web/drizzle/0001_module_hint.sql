@@ -1,0 +1,1 @@
+ALTER TABLE "source_documents" ADD COLUMN "module_hint" integer;
