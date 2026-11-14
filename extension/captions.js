@@ -8,7 +8,7 @@ import { collectSignals } from './src/extract.js';
 const $ = (id) => document.getElementById(id);
 const el = (tag, props = {}, ...children) => { const n = Object.assign(document.createElement(tag), props); n.append(...children); return n; };
 const tabId = Number(new URLSearchParams(location.search).get('tabId'));
-let settings, courses = [], files = [], page = null, embeds = null;
+let settings, courses = [], files = [], page = null, embeds = null, titleEdited = false;
 
 const fatal = (m) => { $('fatal').textContent = m; $('fatal').hidden = false; for (const s of ['step-access', 'step-read', 'step-results']) $(s).hidden = true; };
 const missingOrigins = async () => { const out = []; for (const o of embeds.origins) if (!(await chrome.permissions.contains({ origins: [`${o}/*`] }))) out.push(o); return out; };
@@ -31,12 +31,14 @@ async function read() {
   let results = [];
   try { results = (await chrome.scripting.executeScript({ target: { tabId, allFrames: true }, func: readCaptions })).map((r) => r.result).filter(Boolean); }
   catch { $('read').disabled = false; return fatal('The browser did not allow this page to be read. Reload the page, click the Klierly button again and retry.'); }
-  files = captionFiles(results, cleanTitle(page.title) || 'Lecture').map((f) => ({ ...f, selected: true }));
+  const notes = [];
+  files = captionFiles(results, cleanTitle(page.title) || 'Lecture', notes).map((f) => ({ ...f, selected: true }));
   $('read').disabled = false;
   const players = results.reduce((n, r) => n + r.media, 0);
-  logEvent(settings, 'captions.read', { frames: results.length, players, sources: files.length, tracks: files.filter((f) => f.cues).length, panels: files.filter((f) => !f.cues).length, embeddedOrigins: embeds.origins.length }, $('target').value);
+  logEvent(settings, 'captions.read', { frames: results.length, players, sources: files.length, tracks: files.filter((f) => f.cues).length, panels: files.filter((f) => !f.cues).length, embeddedOrigins: embeds.origins.length, mediasite: files.filter((f) => f.source === 'mediasite').length, skipped: notes.length }, $('target').value);
   if (!files.length) {
     $('read-status').textContent = '';
+    if (notes.length) return fatal(`${[...new Set(notes)].join(' ')} If the lecture opened inside Canvas, open the video in its own tab or window and use the extension there.`);
     return fatal(players
       ? 'A video player was found, but it does not expose its captions to the browser (some players draw captions themselves or have none). If the player offers a transcript or caption download, save that file and upload it in Klierly → Materials.'
       : 'No video player with captions was found in the parts of this page the extension may read. If the video is inside an embedded frame, start it once so the player loads, then try again; or download the transcript from the player and upload it in Klierly.');
@@ -57,7 +59,8 @@ async function doImport() {
   let ok = 0, link = null;
   try {
     for (const [i, f] of files.filter((x) => x.selected).entries()) {
-      const title = `${cleanTitle($('title').value) || 'Lecture'}${f.cues ? ' — captions' : ' — transcript'}${i ? ` ${i + 1}` : ''}`;
+      // A Mediasite lecture keeps its own title unless the student typed one.
+      const title = f.source === 'mediasite' && !titleEdited ? f.title : `${cleanTitle($('title').value) || 'Lecture'}${f.cues ? ' — captions' : ' — transcript'}${i ? ` ${i + 1}` : ''}`;
       const res = await importFile(settings, { courseId: $('target').value, title, url: page.url, permissionConfirmed: 'true',
         moduleName: $('module').selectedOptions[0]?.value ? $('module').selectedOptions[0].textContent : null }, new Blob([f.text], { type: f.mime }), f.filename);
       ok += 1; link = safeHttpUrl(res.viewUrl) || link;
@@ -88,6 +91,7 @@ async function init() {
   fillModules();
   $('target').addEventListener('change', fillModules);
   $('permission').addEventListener('change', ready);
+  $('title').addEventListener('input', () => { titleEdited = true; });
   $('grant').addEventListener('click', async () => {
     try { await chrome.permissions.request({ origins: (await missingOrigins()).map((o) => `${o}/*`) }); } catch { /* shown below */ }
     await showStep();

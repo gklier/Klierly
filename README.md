@@ -32,7 +32,10 @@ cd web && npm install && npm run db:migrate && npm run build && npm start
 Open http://localhost:3000. Health check: `curl http://localhost:3000/api/health` →
 `{"status":"ok","database":true,"worker":true}`. For development use `npm run dev` instead of build/start.
 
-**Or with Docker** (builds for amd64 and arm64): `cp .env.example .env`, set `APP_SECRET`,
+**On a server (for example Oracle Cloud, so it is always on):** follow `docs/DEPLOY_ORACLE.md`, a step-by-step guide that also
+covers private access through an SSH tunnel, updating, and backups.
+
+**Or with Docker** (built and run on x86_64 here; Arm is not verified): `cp .env.example .env`, set `APP_SECRET`,
 `WORKER_TOKEN`, `POSTGRES_PASSWORD`, then `docker compose up --build`. Only the web app is published,
 on 127.0.0.1:3000.
 

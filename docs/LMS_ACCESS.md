@@ -43,14 +43,27 @@ unreleased items, external tools. The server repeats the assessment check on eve
 
 ## Mediasite (UF lectures)
 
-UF lectures are usually Mediasite videos embedded in Canvas. The caption reader handles standard
-HTML caption tracks and visible transcript panels, in embedded frames after a per-site permission.
-Whether Mediasite exposes either in a way the extension can read is **unknown until tested on a real
-page**. The founder has a working method for pulling transcripts; once shared it should be reviewed
-against the same rules as everything else here: reading what the student's own browser shows, in
-the student's own session, with their permission. Anything that reads cookies or stored tokens,
-calls undocumented endpoints in a way that sidesteps the player's own access controls, or downloads
-media would not be added, and the reason would be given.
+UF lectures are usually Mediasite videos, often embedded in Canvas. The founder supplied the console
+snippet he uses to download a transcript, and it is built into "Import captions".
+
+**What it does** (the same thing Mediasite's own player does): on a Mediasite `/Mediasite/Play/<id>` page,
+inside that page and the student's own signed-in session, it asks the player's service
+(`…/PlayerService.svc/json/GetPlayerOptions`) for the lecture's details, takes the first transcript's
+`CaptionsUrl`, and downloads it. It does not read cookies or tokens, runs only after the student opens
+the caption importer and (for a player embedded from another site) allows that site, and it fails
+cleanly for any lecture the student cannot open. The student sees a preview before anything is imported.
+
+**Why it is acceptable here, and where that stops:** it reads what the student's own session is already
+shown, using the call the player itself makes, with no access control bypassed. It relies on an internal
+service that Mediasite may change, and it is not an official Mediasite API. Whether UF permits scripted
+transcript downloads is **not established**; the transcript is the instructor's work and is imported for
+the student's own study only.
+
+**What is unknown until tested on a real lecture:** the format `CaptionsUrl` returns. The importer accepts
+WebVTT, SRT, timed-text XML and plain text, and refuses anything else (for example JSON, or a login page)
+with a message instead of importing noise. Only the first transcript is used, as in the snippet. If the
+lecture opens inside Canvas via a launch page, the player frame may not be listed; opening the video in its
+own tab and using the extension there works the same way.
 
 ## Adding another LMS
 

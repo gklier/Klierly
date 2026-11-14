@@ -24,7 +24,7 @@ export async function saveProvider(_: ActionState, fd: FormData): Promise<Action
   if (key.length > 500) return { error: "That API key is too long." };
   if (fd.get("disclosure") !== "on") return { error: "Confirm that you understand what is sent to this provider." };
   const limit = Math.min(1000, Math.max(1, Math.round(Number(fd.get("dailyRequestLimit")) || 60)));
-  const preset = fd.get("preset") === "navigator-experimental" ? "navigator-experimental" as const : "openai-compatible" as const;
+  const preset = fd.get("preset") === "navigator-experimental" ? "navigator-experimental" as const : fd.get("preset") === "google-ai-studio" ? "google-ai-studio" as const : "openai-compatible" as const;
   const secret = key ? { apiKeyEnc: encryptSecret(key), keyHint: `…${key.slice(-4)}` } : {};
   const values = { preset, baseUrl: checked.url, model, dailyRequestLimit: limit, disclosureAckAt: new Date(), updatedAt: new Date(), lastTestAt: null, lastTestOk: null, ...secret };
   if (existing) await db.update(schema.providerSettings).set(values).where(eq(schema.providerSettings.userId, user.id));

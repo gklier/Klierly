@@ -16,14 +16,13 @@ blueprint**, blueprint-weighted mock exam, targeted follow-up · **CI**.
 
 - **Sharing materials between students (crowdsourcing).** Not built. It reverses the original rule against shared repositories of course material, and the main risk is copyright and university policy, not code. See `docs/DECISIONS.md` for the reasoning and the narrow version that would be safe to build.
 - **Past exams for structure.** Not built; a structure-only version (count, types, topic spread; never shown, shared or used to write questions) is proposed in `docs/DECISIONS.md`.
-- **Mediasite transcripts.** Waiting for the founder's working transcript-pull code; see `docs/LMS_ACCESS.md`.
 
 ## Next, in order
 
 1. **Real-course shakedown (QMB 3250 at UF)**: run discovery and captions on the real site; adjust
    Canvas selectors, file-download handling and caption reading to what is actually there.
 2. **Configure a managed AI provider** (founder decision) and evaluate question quality on real material.
-3. Mediasite captions (UF's lecture platform) once the founder shares how transcripts are pulled today; captions inside course discovery (today captions are imported per page).
+3. Mediasite is built from the founder's snippet but untested on a real lecture; next is making lecture videos part of a course-wide run (a permission prompt needs a click, so it needs a deliberate step), and fixing the format once the real transcript is seen.
 4. Official Canvas OAuth with an institution-issued developer key, replacing page reading where a university approves it.
 
 ## Deliberately not built (hidden, no dead buttons)

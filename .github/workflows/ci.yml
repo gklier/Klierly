@@ -4,6 +4,7 @@ on:
   pull_request:
   push:
     branches: [main]
+  workflow_dispatch:
 
 permissions:
   contents: read
@@ -99,6 +100,50 @@ jobs:
             web/test-results
             worker/worker.log
           retention-days: 7
+
+  docker:
+    name: Docker images build and the stack starts (x86_64)
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+      - name: Settings for a throwaway test stack
+        run: |
+          printf 'POSTGRES_PASSWORD=%s\nWORKER_TOKEN=%s\nAPP_SECRET=%s\nAPP_URL=http://localhost:3000\n' "$(openssl rand -hex 16)" "$(openssl rand -hex 24)" "$(openssl rand -base64 48 | tr -d '\n')" > .env
+      - name: Build and start (waits for every health check)
+        run: docker compose up -d --build --wait --wait-timeout 300
+      - name: Health
+        run: curl -fsS http://localhost:3000/api/health
+      - name: Logs on failure
+        if: failure()
+        run: docker compose logs --tail 120
+      - run: docker compose down -v
+
+  docker-arm64:
+    # Oracle's free machines are Arm. This builds and starts the same stack under emulation to catch
+    # Arm-only problems. Slow (it compiles under QEMU), so it runs on main and when started by hand.
+    name: Docker stack on linux/arm64 (emulated)
+    if: github.event_name == 'workflow_dispatch' || github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    timeout-minutes: 90
+    steps:
+      - uses: actions/checkout@v4
+      - uses: docker/setup-qemu-action@v3
+        with: { platforms: arm64 }
+      - name: Settings for a throwaway test stack
+        run: |
+          printf 'POSTGRES_PASSWORD=%s\nWORKER_TOKEN=%s\nAPP_SECRET=%s\nAPP_URL=http://localhost:3000\n' "$(openssl rand -hex 16)" "$(openssl rand -hex 24)" "$(openssl rand -base64 48 | tr -d '\n')" > .env
+      - name: Build and start on arm64
+        env: { DOCKER_DEFAULT_PLATFORM: linux/arm64 }
+        run: docker compose up -d --build --wait --wait-timeout 900
+      - name: Confirm it is really arm64, and healthy
+        run: |
+          docker compose exec -T worker uname -m
+          curl -fsS http://localhost:3000/api/health
+      - name: Logs on failure
+        if: failure()
+        run: docker compose logs --tail 150
+      - run: docker compose down -v
 
   secrets:
     name: No secrets or student data in Git

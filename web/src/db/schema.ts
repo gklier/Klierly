@@ -303,7 +303,7 @@ export const topicMastery = pgTable("topic_mastery", {
 
 export const providerSettings = pgTable("provider_settings", {
   userId: uuid("user_id").primaryKey().references(() => users.id, { onDelete: "cascade" }),
-  preset: text("preset").$type<"openai-compatible" | "navigator-experimental">().notNull().default("openai-compatible"),
+  preset: text("preset").$type<"openai-compatible" | "navigator-experimental" | "google-ai-studio">().notNull().default("openai-compatible"),
   baseUrl: text("base_url").notNull(),
   model: text("model").notNull(),
   apiKeyEnc: text("api_key_enc").notNull(),

@@ -21,7 +21,7 @@ Not affiliated with or endorsed by any LMS or university, and not an official Ca
   pages are replaced.
 - **Capture this page** — click the icon on any page, check the preview, choose course and module,
   tick the declaration, Import. Highlight text first to capture only the selection.
-- **Import captions** — on a page with a lecture video, click the icon → *Import its captions or
+- **Import captions** — on a page with a lecture video (a Mediasite lecture is read the way the Mediasite player itself loads its transcript; see `../docs/LMS_ACCESS.md`), click the icon → *Import its captions or
   transcript*. Embedded players need a one-time permission for the video site.
 
 ## What it does and does not read

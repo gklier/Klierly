@@ -47,7 +47,7 @@ for it, and that someone pays or hosts. The options, with their real constraints
 
 | Option | Cost | Notes |
 | --- | --- | --- |
-| **A paid API** (any OpenAI-compatible provider) | Per use; the monthly budget stop and quotas cap it | Best quality; cost scales with students. Founder decision |
+| **A paid API** (any OpenAI-compatible provider, including Google's paid Gemini API) | Per use; the monthly budget stop and quotas cap it | Best quality; cost scales with students. Founder decision |
 | **Self-hosted on a small server** (Ollama exposes `http://<host>:11434/v1`, which works here unchanged) | Server cost only | See the limits below |
 | **NaviGator** | UF credits | Not suitable for serving other students; see below |
 
@@ -61,6 +61,34 @@ laptop either; a small quantised model (a few billion parameters) can, but slowl
 and its output will fail Klierly's JSON, citation and arithmetic checks more often. Treat a
 self-hosted small model as a free fallback, not as the main experience. If a bigger model is wanted,
 run it somewhere with a GPU and point `MANAGED_AI_BASE_URL` at it.
+
+## Google AI Studio (Gemini API)
+
+Read on 2026-11-14 at Google's AI Studio documentation. It exposes an OpenAI-compatible endpoint, so it
+works with Klierly's generic connection: base URL `https://generativelanguage.googleapis.com/v1beta/openai/`,
+`Authorization: Bearer <Gemini API key>`, a model name copied from AI Studio (the model list changes, so
+none is hard-coded). Google calls the OpenAI compatibility "still in beta"; its page does not say whether
+`response_format` JSON mode is supported, and Klierly retries without it when a server rejects it.
+
+**The free versus paid difference is the important part.** Per Google's terms: on the **unpaid** tier, Google
+uses submitted content to improve its products and machine-learning technologies, human reviewers may read
+it (disconnected from your account), and developers are told "Do not submit sensitive, confidential, or
+personal information". On the **paid** tier Google does not use prompts or responses to improve its
+products (it logs them for a limited time to detect abuse). The terms also require API developers to be
+18 or over, describe the service as for professional or business purposes, and say that API clients made
+available to users in the EEA may use only paid services. Limits apply per Google project, can change, and
+are shown in AI Studio.
+
+What that means for Klierly:
+
+- **Your own key, for your own study:** works as the Google preset under Settings. On the free tier your
+  course excerpts go to a service that may train on them and have people read them, which also conflicts
+  with Klierly's promise not to train on student content. That is your decision to make; the Settings page
+  says so next to the preset.
+- **As the managed provider for other students:** use a **paid** Google project with billing and a budget
+  cap, never the free tier. Set `MANAGED_AI_BASE_URL` to the address above, `MANAGED_AI_MODEL` to a
+  low-cost model from AI Studio, and your own per-student quotas and dollar budget stop in `.env.example`.
+  Check Google's current pricing yourself; this page does not quote any.
 
 ## UF NaviGator Toolkit
 

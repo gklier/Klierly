@@ -78,3 +78,21 @@
   experimental BYOK option; UF's pages do not authorise serving other students from personal keys.
 - **Oracle sizing corrected.** The current Always Free page says 2 OCPUs and 12 GB total (an earlier
   note assumed 4 and 24). A 120B-parameter model is out of reach there.
+
+## Phase 2, third round
+
+- **Mediasite transcripts** are built in from the founder's own snippet (same call the player makes, in the
+  student's session, no cookies or tokens read). Parsing is tolerant because the real format is unconfirmed.
+  Every network call site in the extension is now pinned by a test, so adding one needs review.
+- **Sharing "what we learned".** The founder clarified: not the instructors' files, but the notes and
+  knowledge students derive. That is the safe version described earlier, with one refinement to design
+  for: derived content is not automatically free of the instructor's rights (an AI summary that tracks a
+  lecture closely, or practice questions modelled on one, can still be a derivative of it). So the first slice
+  should be what students write themselves, plus course structure and aggregate, anonymous difficulty
+  statistics. Not built; waiting on the founder's choices (see the final message of this round).
+- **Google AI Studio**: usable through the generic connection, with a preset. The free tier is
+  unsuitable for other students' material (training use and human review per Google's terms); a paid project is.
+- **Docker is now verified on x86_64** (it was never built before); the build found a real startup bug.
+  CI builds and starts the stack on every PR, and has a manual/main-only emulated Arm64 job.
+- **Oracle**: the guide recommends private access through an SSH tunnel first (no public ports, no
+  domain, and the extension's `localhost` exception for http keeps working).

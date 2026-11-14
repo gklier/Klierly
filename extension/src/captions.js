@@ -39,7 +39,46 @@ export async function readCaptions() {
     const text = (el.innerText || '').trim();
     if (text.length >= 200) items.push({ kind: 'panel', label: 'Transcript panel', text: text.slice(0, 400000) });
   }
-  return { frame: location.origin + location.pathname, title: document.title, media: media.length, items };
+
+  // Mediasite (UF's lecture platform). On a Mediasite Play page, ask the player's own service for the
+  // lecture's transcript, exactly as the player does, from inside the page and the student's own session.
+  // Nothing here reads cookies or tokens, and a lecture the student cannot open simply fails.
+  const notes = [];
+  const play = /\/Mediasite\/Play\/([^/?#]+)/i.exec(location.pathname);
+  if (play) {
+    try {
+      const servicePath = (document.querySelector('#ServicePath')?.textContent || '').trim() || '/Mediasite/PlayerService/PlayerService.svc/json';
+      const endpoint = new URL(servicePath.replace(/\/$/, '') + '/GetPlayerOptions', location.origin).href;
+      const res = await fetch(endpoint, {
+        method: 'POST', credentials: 'include',
+        headers: { 'Content-Type': 'application/json; charset=utf-8', 'X-Requested-With': 'XMLHttpRequest' },
+        body: JSON.stringify({ getPlayerOptionsRequest: { ResourceId: play[1], QueryString: location.search || '', UrlReferrer: document.referrer || '', UseScreenReader: false } }),
+      });
+      if (!res.ok) notes.push(`Mediasite answered ${res.status} when asked for this lecture's details. Sign in to Mediasite again if needed; some lectures are restricted.`);
+      else {
+        const p = (await res.json().catch(() => null))?.d?.Presentation;
+        const captionsUrl = p?.Transcripts?.[0]?.CaptionsUrl;
+        if (!p) notes.push('Mediasite did not return details for this lecture. It may be restricted, or the player layout changed.');
+        else if (!captionsUrl) notes.push('This lecture has no transcript or captions published in Mediasite.');
+        else {
+          const target = new URL(captionsUrl, location.href);
+          if (target.protocol !== 'https:' && target.protocol !== 'http:') notes.push('Mediasite gave a transcript address that is not a web address.');
+          else {
+            const cr = await fetch(target.href, { credentials: 'include' });
+            if (!cr.ok) notes.push(`The transcript download failed (${cr.status}).`);
+            else {
+              const raw = await cr.text();
+              if (raw.length > 5000000) notes.push('The transcript is larger than 5 MB, which is more than expected for one lecture.');
+              else items.push({ kind: 'mediasite', label: 'Mediasite transcript', title: String(p.Title || p.Name || document.title || '').slice(0, 200), raw, transcripts: Array.isArray(p.Transcripts) ? p.Transcripts.length : 1 });
+            }
+          }
+        }
+      }
+    } catch {
+      notes.push('The browser did not let the page fetch this lecture\'s transcript (it may be served from another address). Download it from the player and upload it in Klierly.');
+    }
+  }
+  return { frame: location.origin + location.pathname, title: document.title, media: media.length, items, notes };
 }
 
 const stamp = (sec) => {
@@ -58,11 +97,60 @@ export function toVtt(cues) {
   return lines.join('\n');
 }
 
-/** Turn what the frames returned into importable files. */
-export function captionFiles(results, baseTitle) {
+const decodeEntities = (s) => s.replace(/&lt;/g, '<').replace(/&gt;/g, '>').replace(/&quot;/g, '"').replace(/&apos;|&#39;/g, "'").replace(/&amp;/g, '&');
+
+/** "00:01:02.500", "1:02.5", "62.5s" → seconds, or null. */
+function clockToSeconds(v) {
+  const t = String(v || '').trim();
+  const secs = /^(\d+(?:\.\d+)?)s$/.exec(t);
+  if (secs) return Number(secs[1]);
+  const m = /^(?:(\d+):)?(\d{1,2}):(\d{2}(?:[.,]\d+)?)$/.exec(t);
+  return m ? Number(m[1] || 0) * 3600 + Number(m[2]) * 60 + Number(m[3].replace(',', '.')) : null;
+}
+
+/** Timed-text XML (TTML / DFXP) → WebVTT, or '' if it holds no timed lines. */
+export function ttmlToVtt(xml) {
+  const cues = [];
+  for (const m of String(xml).matchAll(/<p\b([^>]*)>([\s\S]*?)<\/p>/gi)) {
+    const begin = /\bbegin="([^"]+)"/i.exec(m[1]), end = /\bend="([^"]+)"/i.exec(m[1]), dur = /\bdur="([^"]+)"/i.exec(m[1]);
+    const s = clockToSeconds(begin?.[1]);
+    const e = end ? clockToSeconds(end[1]) : dur && s !== null ? s + (clockToSeconds(dur[1]) ?? 0) : null;
+    const t = decodeEntities(m[2].replace(/<br\s*\/?>/gi, ' ').replace(/<[^>]+>/g, '')).replace(/\s+/g, ' ').trim();
+    if (s !== null && e !== null && t) cues.push({ s, e, t });
+  }
+  return cues.length ? toVtt(cues) : '';
+}
+
+/**
+ * What a transcript download actually is. Mediasite's format has not been confirmed on a real UF
+ * lecture, so this accepts WebVTT, SRT, timed-text XML and plain text, and refuses anything else
+ * (for example JSON) rather than importing noise.
+ */
+export function normalizeTranscript(raw) {
+  const t = String(raw ?? '').replace(/^\uFEFF/, '').trim();
+  if (!t) return { format: 'empty' };
+  if (/^WEBVTT/.test(t)) return { format: 'vtt', text: t };
+  if (/^\d+\s*\r?\n\d{1,2}:\d{2}:\d{2}[,.]\d{1,3}\s*-->/.test(t)) return { format: 'srt', text: t };
+  if (/^<\?xml|^<tt[\s>]/i.test(t) || /<tt[\s>]/i.test(t.slice(0, 600))) { const vtt = ttmlToVtt(t); return vtt ? { format: 'vtt', text: vtt } : { format: 'unrecognised' }; }
+  if (/^[[{<]/.test(t)) return { format: 'unrecognised' };
+  return { format: 'text', text: t };
+}
+
+/** Turn what the frames returned into importable files. Reasons something was skipped go into `notes`. */
+export function captionFiles(results, baseTitle, notes = []) {
   const files = [];
   for (const r of results) {
+    for (const n of r?.notes ?? []) notes.push(n);
     for (const item of r?.items ?? []) {
+      if (item.kind === 'mediasite') {
+        const t = normalizeTranscript(item.raw);
+        if (t.format === 'empty') { notes.push('The Mediasite transcript was empty.'); continue; }
+        if (t.format === 'unrecognised') { notes.push('Mediasite returned a transcript in a format Klierly does not recognise yet. Nothing was imported; please share what its first few lines look like so support can be added.'); continue; }
+        const timed = t.format === 'vtt' || t.format === 'srt';
+        const n = files.length + 1;
+        files.push({ title: `${item.title || baseTitle} — transcript`, filename: `mediasite-${n}.${t.format === 'text' ? 'txt' : t.format}`, mime: t.format === 'vtt' ? 'text/vtt' : t.format === 'srt' ? 'application/x-subrip' : 'text/plain', text: t.text, cues: timed ? (t.text.match(/-->/g) || []).length : 0, frame: r.frame, preview: t.text.replace(/WEBVTT|\d{1,2}:\d{2}:\d{2}[.,]\d+\s*-->\s*\d{1,2}:\d{2}:\d{2}[.,]\d+|^\d+$/gm, ' ').replace(/\s+/g, ' ').trim().slice(0, 200), source: 'mediasite' });
+        continue;
+      }
       const n = files.length + 1;
       const suffix = item.lang || item.label ? ` (${item.lang || item.label})` : '';
       if (item.kind === 'track') files.push({ title: `${baseTitle} — captions${suffix}`, filename: `captions-${n}.vtt`, mime: 'text/vtt', text: toVtt(item.cues), cues: item.cues.length, frame: r.frame, preview: item.cues.slice(0, 3).map((c) => c.t).join(' ') });

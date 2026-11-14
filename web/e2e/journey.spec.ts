@@ -179,6 +179,10 @@ test("8b. optional own provider: a bad key fails transparently, a good one conne
   await expect(page.getByLabel("Base URL")).toHaveValue("https://api.ai.it.ufl.edu/v1");
   await expect(page.getByLabel("Model ID")).toHaveValue("llama-3.1-8b-instruct");
   await expect(page.getByLabel("API key")).toHaveValue("");
+  await page.getByLabel("Type").selectOption("google-ai-studio");
+  await expect(page.getByLabel("Base URL")).toHaveValue("https://generativelanguage.googleapis.com/v1beta/openai"); // replaced the NaviGator address
+  await expect(page.getByLabel("Model ID")).toHaveValue(""); // model names change, so the student copies one from AI Studio
+  await expect(page.getByText("On the paid tier it does not use prompts or responses")).toBeVisible();
   await page.getByLabel("Type").selectOption("openai-compatible");
   await expect(page.getByLabel("Base URL")).toHaveValue("");
   await page.getByLabel("Base URL").fill("http://127.0.0.1:4012/v1");

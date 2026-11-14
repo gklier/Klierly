@@ -80,11 +80,11 @@ const FILES: Record<number, { name: string; source: string | null; type: string 
   504: { name: "instructor-slides.pptx", source: "module3-indicators-interactions.pptx", type: "application/vnd.openxmlformats-officedocument.presentationml.presentation" },
 };
 
-export type MockCanvas = { server: http.Server; requests: string[]; state: { version: number } };
+export type MockCanvas = { server: http.Server; requests: string[]; state: { version: number; mediasite: { posts: { resourceId?: string; queryString?: unknown; xhr: string | undefined }[]; captionGets: number } } };
 
 export function startMockCanvas(port: number): Promise<MockCanvas> {
   const requests: string[] = [];
-  const state = { version: 1 };
+  const state = { version: 1, mediasite: { posts: [] as { resourceId?: string; queryString?: unknown; xhr: string | undefined }[], captionGets: 0 } };
   const server = http.createServer((req, res) => {
     const url = new URL(req.url ?? "/", `http://localhost:${port}`);
     const p = url.pathname;
@@ -100,6 +100,8 @@ export function startMockCanvas(port: number): Promise<MockCanvas> {
     if (itemMatch && TARGETS[Number(itemMatch[1])]) return res.writeHead(302, { Location: TARGETS[Number(itemMatch[1])] }).end();
     if (p === `${C}/pages/module-1-overview`) return html(wikiPage("Module 1 overview", "<h2>What this module covers</h2><p>Synthetic mock course page for Klierly tests; not real course content.</p><p>The slope b1 is the estimated change in the average response for a one-unit increase in x. A residual is the observed value minus the predicted value.</p><div style='display:none'>MOCK-HIDDEN-ANSWER-KEY</div>"));
     if (p === `${C}/pages/module-2-overview`) return html(wikiPage("Module 2 overview", `<h2>Partial slopes</h2><p>Synthetic mock course page for Klierly tests; not real course content.</p><p>Each coefficient in a multiple regression is a partial slope, holding the other predictors in the model fixed.</p>${state.version > 1 ? "<p>UPDATED-BY-INSTRUCTOR: adjusted R-squared increases only when a new predictor improves the fit by more than chance.</p>" : ""}`));
+    // A course page whose lecture is a Mediasite player embedded from another site (UF's usual arrangement).
+    if (p === `${C}/pages/lecture-22`) return html(wikiPage("Module 22 lecture", `<h2>Lecture</h2><p>Synthetic mock lecture page for Klierly tests.</p><iframe src="http://127.0.0.1:${port + 1}/Mediasite/Play/abc123?autostart=false" width="480" height="270" title="Mediasite player"></iframe>`));
     // A lecture page: one player on the page itself, one embedded from another site (the usual LMS arrangement).
     if (p === `${C}/pages/lecture-21`) return html(wikiPage("Module 21 lecture", `<h2>Lecture video</h2><p>Synthetic mock lecture page for Klierly tests.</p><video controls width="320"><track kind="captions" srclang="en" label="English" src="${C}/media/lecture.vtt"></video><iframe src="http://127.0.0.1:${port + 1}/player" width="320" height="200" title="Embedded player"></iframe>`));
     if (p === `${C}/media/lecture.vtt`) return res.writeHead(200, { "Content-Type": "text/vtt" }).end(fs.readFileSync(path.join(SAMPLE, "lecture-module2.vtt")));
@@ -115,7 +117,30 @@ export function startMockCanvas(port: number): Promise<MockCanvas> {
     html(shell("Not found", "<h1>Page not found</h1>"), 404);
   });
   // A separate "video platform" origin, like the third-party players course sites embed.
+  const mediasiteBase = `http://127.0.0.1:${port + 1}`;
+  const PRESENTATIONS: Record<string, { Title: string; Transcripts: { CaptionsUrl: string }[] }> = {
+    abc123: { Title: "Mock Mediasite lecture: rank tests", Transcripts: [{ CaptionsUrl: `${mediasiteBase}/Mediasite/captions/abc123.vtt` }, { CaptionsUrl: `${mediasiteBase}/Mediasite/captions/second-language.vtt` }] },
+    ttml1: { Title: "Mock Mediasite lecture: timed text", Transcripts: [{ CaptionsUrl: `${mediasiteBase}/Mediasite/captions/ttml1.xml` }] },
+    none1: { Title: "Mock Mediasite lecture without captions", Transcripts: [] },
+  };
   const player = http.createServer((req, res) => {
+    const u = new URL(req.url ?? "/", mediasiteBase);
+    const play = /^\/Mediasite\/Play\/([^/]+)$/.exec(u.pathname);
+    if (play) return res.writeHead(200, { "Content-Type": "text/html; charset=utf-8" }).end(`<!doctype html><html><head><title>Mock Mediasite player</title></head><body><div id="ServicePath" style="display:none">/Mediasite/PlayerService/PlayerService.svc/json</div><h1>Mock Mediasite player</h1></body></html>`);
+    if (req.method === "POST" && u.pathname === "/Mediasite/PlayerService/PlayerService.svc/json/GetPlayerOptions") {
+      let raw = ""; req.on("data", (c) => { raw += c; });
+      return req.on("end", () => {
+        let body: { getPlayerOptionsRequest?: { ResourceId?: string; QueryString?: unknown } } = {};
+        try { body = JSON.parse(raw); } catch { /* answered below */ }
+        const r = body.getPlayerOptionsRequest;
+        state.mediasite.posts.push({ resourceId: r?.ResourceId, queryString: r?.QueryString, xhr: req.headers["x-requested-with"] as string | undefined });
+        if (!r?.ResourceId || !/application\/json/.test(req.headers["content-type"] ?? "")) return res.writeHead(400).end("bad request");
+        const pres = PRESENTATIONS[r.ResourceId];
+        res.writeHead(200, { "Content-Type": "application/json; charset=utf-8" }).end(JSON.stringify({ d: pres ? { Presentation: pres } : {} }));
+      });
+    }
+    if (u.pathname === "/Mediasite/captions/abc123.vtt") { state.mediasite.captionGets++; return res.writeHead(200, { "Content-Type": "text/vtt" }).end("WEBVTT\n\n00:00:02.000 --> 00:00:06.000\nMEDIASITE-TRANSCRIPT-LINE the Wilcoxon rank sum test compares two independent groups using ranks.\n\n00:00:06.000 --> 00:00:10.000\nThe Kruskal-Wallis test handles three or more groups.\n"); }
+    if (u.pathname === "/Mediasite/captions/ttml1.xml") { state.mediasite.captionGets++; return res.writeHead(200, { "Content-Type": "application/xml" }).end('<?xml version="1.0" encoding="utf-8"?><tt xmlns="http://www.w3.org/ns/ttml"><body><div><p begin="00:00:01.000" end="00:00:04.000">TTML-LINE ranks replace the raw values &amp; keep their order.</p><p begin="00:00:04.000" end="00:00:08.000">Ties receive the average of their ranks.</p></div></body></tt>'); }
     if (req.url === "/captions.vtt") return res.writeHead(200, { "Content-Type": "text/vtt" }).end("WEBVTT\n\n00:00:01.000 --> 00:00:05.000\nEMBEDDED-PLAYER-CAPTION the Wilcoxon rank-sum test compares two independent groups using ranks.\n\n00:00:05.000 --> 00:00:09.500\nThe Kruskal-Wallis test extends the idea to three or more groups.\n");
     res.writeHead(200, { "Content-Type": "text/html; charset=utf-8" }).end(`<!doctype html><html><head><title>Mock player</title></head><body><video controls><track kind="subtitles" srclang="en" label="English (auto)" src="/captions.vtt"></video></body></html>`);
   });

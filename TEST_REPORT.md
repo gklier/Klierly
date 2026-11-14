@@ -11,8 +11,8 @@ Run on 2026-11-14 in a Linux x86_64 container: Node 22, Python 3.13, PostgreSQL 
 | `cd worker && python -m pytest -q` | **25 passed** |
 | `cd web && npm run typecheck` / `npm run lint` | clean / clean |
 | `cd web && npm test` (real PostgreSQL + real worker + mock AI) | **88 passed** |
-| `cd web && npm run test:e2e` (production build; Chromium with the extension loaded) | **34 passed**: 19 journey, 7 single-page capture, 8 course discovery, captions and extension logging |
-| `cd extension && npm test` | **14 passed** |
+| `cd web && npm run test:e2e` (production build; Chromium with the extension loaded) | **36 passed**: 19 journey, 7 single-page capture, 10 course discovery, captions, Mediasite and extension logging |
+| `cd extension && npm test` | **17 passed** |
 | `npm audit --omit=dev` (web) · `pip-audit` (worker, Phase 1) | 0 vulnerabilities · none known |
 | `docker compose config` | valid (syntax only) |
 | GitHub Actions on a clean runner (fresh install from the lockfiles) | all 4 jobs pass |
@@ -50,6 +50,16 @@ further runs and its text was not captured. Treat as an open flake.
 screenshotted, but only the text visible in those screenshots; the real page may differ. The old
 sources already in your account keep the topics they got; delete them and re-import to see the new behaviour.
 
+## Added in the third round
+
+| Item | Evidence |
+| --- | --- |
+| **Docker, for the first time** | The sandbox could run a Docker daemon, so the real `worker/Dockerfile`, `web/Dockerfile` and `docker-compose.yml` were built and started (x86_64): database, worker and web all healthy; the web container runs as user `node`; the sample course was imported by the containerised worker, a duplicate upload recognised and a practice answer graded; after `down` and `up` the account, course and 8 sources were still there. Idle memory: web 143 MB, worker 82 MB, database 35 MB. Builds ran with test-only base images that trust the sandbox proxy; nothing in the repo changed for that. |
+| A bug only the image build could show | After dev dependencies are pruned, `next start` tried to install TypeScript to read `next.config.ts` and never became healthy. Fixed by `next.config.mjs`. |
+| Mediasite transcripts | Unit: WebVTT, SRT, timed-text XML (entities decoded) and plain text accepted; JSON and a login page refused; each skip reason reported. E2E against a mock Mediasite player embedded from another site: exactly one `GetPlayerOptions` POST naming the presentation with the player's header, one transcript download, first transcript only, preview before import, cited by lecture timestamp in Klierly; timed-text XML converted; a lecture with no transcript explains that plainly. The mock is my reconstruction from the snippet, **not real Mediasite**. |
+| Every network call site in the extension is pinned | A test fixes the number of `fetch(` calls per file (api 1, Canvas adapter 1, captions 2). |
+| Google AI Studio and NaviGator presets | E2E: each fills its own address (and NaviGator's example model), replaces the other's, never touches the key, and Google's free-versus-paid warning is on the page. |
+
 ## Not verified — read this before relying on anything
 
 1. **Real Canvas (UF or any).** Discovery, file download and caption reading have only met a
@@ -65,7 +75,7 @@ sources already in your account keep the topics they got; delete them and re-imp
    Question *quality* on real statistics material is unknown; the checks guarantee structure,
    sources and arithmetic only.
 4. **Institutional permission** to use the extension on a university course site: not checked with UF.
-5. **Docker / Oracle ARM64.** No Docker daemon available: images never built or started.
+5. **Oracle / Arm.** Docker *is* now verified on x86_64 (see below). Arm is not: see the CI result noted below. The server scripts and the public HTTPS overlay were never run on a real Oracle machine.
 6. **Video platforms.** Only standard HTML text tracks and visible transcript panels are read.
    Whether QMB 3250's player exposes either is unknown.
 7. Edge and Firefox untested. No screen-reader or load testing.

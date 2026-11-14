@@ -69,10 +69,10 @@ test.afterAll(async () => {
 });
 
 declare const chrome: { tabs: { query(q: { url: string }): Promise<{ id?: number }[]> } };
-async function lmsTabId(): Promise<number> {
+async function lmsTabId(pattern = `${LMS}/*`): Promise<number> {
   const helper = await ctx.newPage();
   await helper.goto(`chrome-extension://${extId}/options.html`);
-  const id = await helper.evaluate(async (url) => (await chrome.tabs.query({ url }))[0]?.id, `${LMS}/*`);
+  const id = await helper.evaluate(async (url) => (await chrome.tabs.query({ url }))[0]?.id, pattern);
   await helper.close();
   return id!;
 }
@@ -103,7 +103,7 @@ test("scan: a structured inventory with reasons for everything that is not offer
   const m2 = d.locator("section.module", { hasText: "Module 2: Multiple Regression" });
   await expect(m2.locator("li", { hasText: "Homework 2" })).toContainText("Graded work is not imported automatically.");
   await expect(m2.locator("li", { hasText: "Week 2 discussion" })).toContainText("other students’ posts");
-  await expect(m2.locator("li", { hasText: "Lecture video player" })).toContainText("cannot be read");
+  await expect(m2.locator("li", { hasText: "Lecture video player" })).toContainText("Import captions");
   const m3 = d.locator("section.module", { hasText: "Module 3: Indicator Variables" });
   await expect(m3).toContainText("0 of 2 importable");
   await expect(m3.locator("li", { hasText: "Module 3 slides" })).toContainText("Locked or not released yet");
@@ -242,6 +242,53 @@ test("lecture captions: text tracks on the page and inside an embedded player ar
   await app.goto(`/courses/${courseId}/materials`);
 });
 
+test("Mediasite: the lecture transcript is pulled the way the player does, from inside the embedded player", async () => {
+  await lms.goto(`${LMS}/courses/77/pages/lecture-22`);
+  await expect(lms.getByRole("heading", { name: "Lecture" })).toBeVisible();
+  const before = imports.length;
+  const c = await ctx.newPage();
+  await c.goto(`chrome-extension://${extId}/captions.html?tabId=${await lmsTabId()}`);
+  await c.getByRole("button", { name: "Look for captions" }).click();
+  await expect(c.locator("#read-status")).toContainText("Found 1 caption source.", { timeout: 20_000 });
+  await expect(c.locator("#found li")).toContainText("Mock Mediasite lecture: rank tests — transcript");
+  await expect(c.locator("#found li")).toContainText("2 timed captions · from 127.0.0.1:3301");
+  await expect(c.locator("#found li")).toContainText("MEDIASITE-TRANSCRIPT-LINE");
+  expect(imports.length).toBe(before); // nothing is sent before approval
+  // Exactly what the player itself would ask for: one POST naming the presentation, one transcript download, first transcript only.
+  expect(canvas.state.mediasite.posts).toEqual([{ resourceId: "abc123", queryString: "?autostart=false", xhr: "XMLHttpRequest" }]);
+  expect(canvas.state.mediasite.captionGets).toBe(1);
+  await c.getByLabel(/I am allowed to use these captions/).check();
+  await c.getByRole("button", { name: "Import captions" }).click();
+  await expect(c.locator("#done")).toContainText("Imported 1.");
+  await c.close();
+  await app.goto(`/courses/${courseId}/materials`);
+  await app.getByLabel("Search your materials").fill("Wilcoxon rank sum independent groups");
+  await app.getByRole("button", { name: "Search" }).click();
+  await app.getByRole("link", { name: /Mock Mediasite lecture: rank tests — transcript · 0:02/ }).click(); // cited by lecture timestamp
+  await expect(app.locator("li[aria-current=true]")).toContainText("MEDIASITE-TRANSCRIPT-LINE");
+  await app.goto(`/courses/${courseId}/materials`);
+});
+
+test("Mediasite: timed-text XML is converted, and a lecture without a transcript says so plainly", async () => {
+  await lms.goto("http://127.0.0.1:3301/Mediasite/Play/ttml1"); // the player opened in its own tab
+  let c = await ctx.newPage();
+  await c.goto(`chrome-extension://${extId}/captions.html?tabId=${await lmsTabId("http://127.0.0.1:3301/*")}`);
+  await c.getByRole("button", { name: "Look for captions" }).click();
+  await expect(c.locator("#found li")).toContainText("2 timed captions");
+  await expect(c.locator("#found li")).toContainText("TTML-LINE ranks replace the raw values & keep their order.");
+  await c.close();
+
+  await lms.goto("http://127.0.0.1:3301/Mediasite/Play/none1");
+  c = await ctx.newPage();
+  await c.goto(`chrome-extension://${extId}/captions.html?tabId=${await lmsTabId("http://127.0.0.1:3301/*")}`);
+  await c.getByRole("button", { name: "Look for captions" }).click();
+  await expect(c.locator("#fatal")).toContainText("This lecture has no transcript or captions published in Mediasite.");
+  await expect(c.locator("#fatal")).toContainText("open the video in its own tab or window");
+  await expect(c.getByRole("button", { name: "Import captions" })).toBeHidden();
+  await c.close();
+  await lms.goto(`${LMS}/courses/77`);
+});
+
 test("the extension's run summaries reach the activity log as counts and reasons, never page content", async () => {
   const res = await app.request.get("/api/activity/export");
   const text = await res.text();
@@ -255,8 +302,8 @@ test("the extension's run summaries reach the activity log as counts and reasons
   const run = events.find((e) => e.event === "extension.discovery.run" && e.details.tally?.failed === 2)!;
   expect(run.details.failures.map((f) => f.type).sort()).toEqual(["file", "file"]);
   expect(run.details.failures.map((f) => f.reason).join(" ")).toMatch(/\.mp4 type Klierly cannot read.*no download link/s);
-  const cap = events.find((e) => e.event === "extension.captions.read")!;
-  expect(cap.details).toMatchObject({ sources: 2, tracks: 2, panels: 0 });
+  const cap = events.find((e) => e.event === "extension.captions.read" && e.details.tracks === 2)!;
+  expect(cap.details).toMatchObject({ sources: 2, tracks: 2, panels: 0, mediasite: 0 });
   expect(events.some((e) => e.event === "source.created" && e.source === "extension")).toBe(true);
   // Import events carry source titles (course structure); what the extension itself reports carries neither titles nor text.
   const fromExtension = JSON.stringify(events.filter((e) => e.event.startsWith("extension.")));

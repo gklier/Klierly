@@ -26,7 +26,7 @@ test('only pages, files and the syllabus are offered; everything else says why n
   assert.match(classify(item('assignment')).reason, /Graded work/);
   assert.match(classify(item('discussion')).reason, /other students/);
   assert.match(classify(item('link')).reason, /External website/);
-  assert.match(classify(item('tool')).reason, /cannot be read/);
+  assert.match(classify(item('tool')).reason, /Import captions/);
   assert.match(classify(item('other')).reason, /Unrecognised/);
   for (const type of ['quiz', 'assignment', 'discussion', 'link', 'tool', 'other']) assert.equal(classify(item(type)).importable, false, type);
   assert.match(classify(item('page', { locked: true })).reason, /Locked/); // a lock wins over the type

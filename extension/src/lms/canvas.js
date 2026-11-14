@@ -35,7 +35,7 @@ export function classify(item) {
     case 'assignment': return { importable: false, reason: 'Graded work is not imported automatically.' };
     case 'discussion': return { importable: false, reason: 'Discussions contain other students’ posts and are not imported.' };
     case 'link': return { importable: false, reason: 'External website. Open it yourself and capture that page if you are allowed to.' };
-    case 'tool': return { importable: false, reason: 'Embedded external tool (often video); its content cannot be read.' };
+    case 'tool': return { importable: false, reason: 'Embedded external tool, often a lecture video (for example Mediasite). Open it and use “Import captions” on that page.' };
     default: return { importable: false, reason: 'Unrecognised item type. Open it and use single-page capture, or upload the file.' };
   }
 }

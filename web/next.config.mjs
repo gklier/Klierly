@@ -1,4 +1,5 @@
-import type { NextConfig } from "next";
+// Plain JavaScript on purpose: the production image removes dev dependencies, and a TypeScript
+// config would make `next start` try to install TypeScript at startup.
 
 const securityHeaders = [
   { key: "X-Content-Type-Options", value: "nosniff" },
@@ -7,7 +8,8 @@ const securityHeaders = [
   { key: "Permissions-Policy", value: "camera=(), microphone=(), geolocation=()" },
 ];
 
-const nextConfig: NextConfig = {
+/** @type {import("next").NextConfig} */
+const nextConfig = {
   poweredByHeader: false,
   serverExternalPackages: ["pg"],
   experimental: { serverActions: { bodySizeLimit: "2mb" } },
