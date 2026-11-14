@@ -31,7 +31,7 @@ export async function POST(req: Request) {
   try {
     const r = await createSource({
       userId: user.id, courseId, moduleId: null, kind: "file", title, filename: file.name.replace(/[\\/\u0000-\u001f]/g, "_"), mime: file.type || null,
-      data: Buffer.from(await file.arrayBuffer()), originUrl: url, externalId: externalIdOf(field("externalId")), moduleName: field("moduleName") || null,
+      data: Buffer.from(await file.arrayBuffer()), originUrl: url, via: "extension", externalId: externalIdOf(field("externalId")), moduleName: field("moduleName") || null,
     });
     return NextResponse.json({ documentId: r.documentId, jobId: r.jobId, duplicate: r.duplicate, outcome: r.outcome, viewUrl: `${env.appUrl}/courses/${courseId}/materials/${r.documentId}` }, { status: r.duplicate ? 200 : 201, headers: corsHeaders(req) });
   } catch (e) {

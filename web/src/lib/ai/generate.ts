@@ -4,9 +4,11 @@ import type { LearnNoteBody } from "@/db/schema";
 import { chunksForTopic, toOrQuery, type RetrievedChunk } from "@/lib/retrieval";
 import { isTopicHeading } from "@/lib/ingest/proposals";
 import { compute, numericFunctions } from "@/lib/worker";
-import { AiError, chatJson } from "./provider";
-import { learnSystemPrompt, learnUserPrompt, questionSystemPrompt, questionUserPrompt, renderSources, topicSystemPrompt, topicUserPrompt } from "./prompt";
-import { generationSchema, isDuplicate, learnSchema, resolveCitations, shuffleChoices, topicsSchema, validateQuestion } from "./validate";
+import { AiError, aiStatus, chatJson } from "./provider";
+import { env } from "@/lib/env";
+import { logActivity } from "@/lib/activity";
+import { supplementSystemPrompt, supplementUserPrompt, learnSystemPrompt, learnUserPrompt, questionSystemPrompt, questionUserPrompt, renderSources, topicSystemPrompt, topicUserPrompt } from "./prompt";
+import { supplementSchema, generationSchema, isDuplicate, learnSchema, resolveCitations, shuffleChoices, topicsSchema, validateQuestion } from "./validate";
 
 export type TopicResult = { topicId: string; topicName: string; added: number; rejected: string[]; insufficient: string | null; /** Set when generation had to stop here (limit reached, provider error). Earlier topics keep their questions. */ stopped?: string };
 
@@ -23,7 +25,7 @@ async function loadCourse(userId: string, courseId: string) {
  * documents). Invalid output is rejected and retried up to `maxRounds` times
  * with the rejection reasons fed back.
  */
-export async function generateQuestions(opts: { userId: string; courseId: string; topicIds: string[]; perTopic: number; maxRounds?: number }): Promise<TopicResult[]> {
+async function generateQuestionsRun(opts: { userId: string; courseId: string; topicIds: string[]; perTopic: number; maxRounds?: number }): Promise<TopicResult[]> {
   const course = await loadCourse(opts.userId, opts.courseId);
   const topics = await db.select().from(schema.topics)
     .where(and(eq(schema.topics.courseId, opts.courseId), eq(schema.topics.userId, opts.userId), inArray(schema.topics.id, opts.topicIds)));
@@ -86,6 +88,18 @@ export async function generateQuestions(opts: { userId: string; courseId: string
       if (!feedback.length) break; // nothing to fix; do not spend another request
     }
   }
+  return results;
+}
+
+export async function generateQuestions(opts: { userId: string; courseId: string; topicIds: string[]; perTopic: number; maxRounds?: number }): Promise<TopicResult[]> {
+  const results = await generateQuestionsRun(opts);
+  const reasons = new Map<string, number>();
+  for (const r of results) for (const why of r.rejected) reasons.set(why.replace(/\([^)]*\)/g, "()").slice(0, 100), (reasons.get(why.replace(/\([^)]*\)/g, "()").slice(0, 100)) ?? 0) + 1);
+  await logActivity(opts.userId, "ai.questions", { courseId: opts.courseId, details: {
+    added: results.reduce((n, r) => n + r.added, 0), rejected: results.reduce((n, r) => n + r.rejected.length, 0),
+    topics: results.map((r) => ({ name: r.topicName, added: r.added, rejected: r.rejected.length, thin: r.insufficient ? true : undefined, stopped: r.stopped ? true : undefined })),
+    rejectedBecause: [...reasons].sort((a, b) => b[1] - a[1]).slice(0, 5).map(([why, n]) => `${n}× ${why}`),
+  } });
   return results;
 }
 
@@ -166,5 +180,29 @@ export async function proposeTopics(opts: { userId: string; courseId: string }):
       if (res.length) proposed++;
     }
   });
+  await logActivity(opts.userId, "ai.topics", { courseId: opts.courseId, details: { proposed, dropped } });
   return { ok: true, proposed, dropped };
+}
+
+/**
+ * "What your notes leave out": AI-written explanation of gaps around a topic, from general knowledge.
+ * It is NOT course material: stored and shown separately, always labelled, never cited, never used to
+ * write practice questions, and kept free of numeric claims by the prompt (which cannot be verified here).
+ */
+export async function generateSupplement(opts: { userId: string; courseId: string; topicId: string }): Promise<{ ok: true } | { ok: false; reason: string }> {
+  const course = await loadCourse(opts.userId, opts.courseId);
+  const [topic] = await db.select().from(schema.topics)
+    .where(and(eq(schema.topics.id, opts.topicId), eq(schema.topics.courseId, opts.courseId), eq(schema.topics.userId, opts.userId))).limit(1);
+  if (!topic) throw new Error("Topic not found.");
+  const chunks = await chunksForTopic({ userId: opts.userId, courseId: opts.courseId, topicName: topic.name, moduleId: topic.moduleId, limit: 6 });
+  if (!chunks.length) return { ok: false, reason: "No imported material mentions this topic yet, so there is nothing to find gaps in. Import the notes or lecture first." };
+  const out = await chatJson(opts.userId, "supplement", supplementSystemPrompt, supplementUserPrompt({ courseName: course.name, topicName: topic.name, sources: renderSources(chunks) }), { cache: true, maxTokens: 1800 });
+  const parsed = supplementSchema.safeParse(out);
+  if (!parsed.success) throw new AiError("bad_output", "The AI returned the explanation in an unexpected format. Try again.");
+  const st = await aiStatus(opts.userId);
+  const model = st.kind === "byok" ? st.model : env.managedAi?.model ?? "unknown";
+  await db.insert(schema.learnSupplements).values({ userId: opts.userId, courseId: opts.courseId, topicId: topic.id, body: parsed.data, model })
+    .onConflictDoUpdate({ target: schema.learnSupplements.topicId, set: { body: parsed.data, model, createdAt: new Date() } });
+  await logActivity(opts.userId, "ai.supplement", { courseId: opts.courseId, details: { topic: topic.name, gaps: parsed.data.gaps.length } });
+  return { ok: true };
 }

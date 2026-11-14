@@ -12,6 +12,7 @@ import { assessAssessment } from "@/lib/ingest/guard";
 import { retryDocument } from "@/lib/ingest/jobs";
 import { autoMapDocuments, createSource, deleteDocument, IngestError, MAX_PASTE_CHARS } from "@/lib/ingest/pipeline";
 import { rateLimit } from "@/lib/ratelimit";
+import { logActivity } from "@/lib/activity";
 import { hasSampleCourse, loadSampleCourse } from "@/lib/sample";
 import { workerHealth } from "@/lib/worker";
 
@@ -35,6 +36,7 @@ export async function createCourse(_: ActionState, fd: FormData): Promise<Action
   const [course] = await db.insert(schema.courses).values({
     userId: user.id, name, term: str(fd, "term", 60) || null, goal: str(fd, "goal", 500) || null, examDate: examDate || null,
   }).returning({ id: schema.courses.id });
+  await logActivity(user.id, "course.created", { courseId: course.id, details: { name, term: str(fd, "term", 60) || undefined } });
   redirect(`/courses/${course.id}/materials`);
 }
 

@@ -12,7 +12,8 @@ import { loadSampleCourse } from "@/lib/sample";
 import { chunksForTopic, searchChunks } from "@/lib/retrieval";
 import { finishSession, getHint, getSessionView, reportQuestion, startSession, submitAnswer, tagError } from "@/lib/practice/service";
 import { getPlan, savePlan } from "@/lib/plan/service";
-import { generateLearnNote, generateQuestions, proposeTopics } from "@/lib/ai/generate";
+import { generateLearnNote, generateQuestions, generateSupplement, proposeTopics } from "@/lib/ai/generate";
+import { logActivity } from "@/lib/activity";
 import { AiError, aiStatus } from "@/lib/ai/provider";
 import { expandCitations } from "@/lib/citations";
 import { addDays, today } from "@/lib/dates";
@@ -104,6 +105,41 @@ describe("ingestion", () => {
     expect(after.moduleId).toBe(mod.id); // module mapping persists
     const hits = await searchChunks({ userId: alice.id, courseId: course.id, query: "plausible values confidence interval" });
     expect(hits[0].documentId).toBe(paste.documentId);
+  });
+});
+
+describe("exam format, objectives and the activity log", () => {
+  it("reads the exam structure from the syllabus and keeps each format with its exam", async () => {
+    const formats = await db.select().from(schema.examFormats).where(eq(schema.examFormats.courseId, sampleId));
+    expect(formats.map((f) => [f.examKey, f.questionCount, f.minutes, f.points]).sort()).toEqual([["exam 1", 27, 75, 100], ["final", 43, 120, null]]);
+    expect(formats.every((f) => f.evidenceChunkId)).toBe(true);
+    const exam1 = formats.find((f) => f.examKey === "exam 1")!;
+    expect(exam1.types).toEqual(expect.arrayContaining(["multiple choice", "free response"]));
+  });
+
+  it("proposes one topic per learning objective, with the full objective kept, and nothing is applied without review", async () => {
+    const course = await makeCourse(alice.id, "Objective topics");
+    await waitForDocument((await upload(alice.id, course.id, "syllabus.md")).documentId);
+    const topics = (await db.select().from(schema.proposals).where(and(eq(schema.proposals.courseId, course.id), eq(schema.proposals.kind, "topic")))).map((p) => p.payload);
+    expect(topics).toHaveLength(12);
+    expect(topics.every((t) => t.kind === "topic" && t.via === "objective" && t.detail && t.name.length < 80)).toBe(true);
+    expect(await db.select().from(schema.topics).where(eq(schema.topics.courseId, course.id))).toHaveLength(0);
+    await resolveProposals(alice.id, course.id, "all", "accept", ["topic"]);
+    expect((await topicStates(alice.id, course.id)).length).toBe(12);
+  });
+
+  it("a topic that says the same thing as a known one is not suggested again", async () => {
+    const course = await makeCourse(alice.id, "Near duplicates");
+    const paste = (title: string, text: string) => createSource({ userId: alice.id, courseId: course.id, moduleId: null, kind: "paste", title, filename: "paste.txt", mime: "text/plain", data: Buffer.from(text), originUrl: null });
+    await waitForDocument((await paste("Overview page", "Module 21: Rank tests\n\nLearning Objectives\n\nConduct a Wilcoxon Rank Sum and Mann-Whitney test, including stating a hypothesis and checking the assumptions.")).documentId);
+    await resolveProposals(alice.id, course.id, "all", "accept");
+    const before = (await topicStates(alice.id, course.id)).length;
+    expect(before).toBe(1);
+    await waitForDocument((await paste("Notes", "Wilcoxon Rank – Sum Test / Mann Whitney Statistic\n\nRank the pooled data and add up the ranks of the first group. Compare that sum with its null distribution.")).documentId);
+    const pending = await db.select().from(schema.proposals).where(and(eq(schema.proposals.courseId, course.id), eq(schema.proposals.kind, "topic"), eq(schema.proposals.status, "pending")));
+    expect(pending).toHaveLength(0);
+    await resolveProposals(alice.id, course.id, "all", "accept");
+    expect((await topicStates(alice.id, course.id)).length).toBe(before);
   });
 });
 
@@ -502,6 +538,25 @@ describe("managed AI (no key needed)", () => {
     expect(made.every((t) => t.hasSources)).toBe(true);
   }, 60_000);
 
+  it("writes a labelled AI supplement, stored apart from the notes, only for topics that have material", async () => {
+    const course = await makeCourse(bob.id, "Supplement course");
+    await waitForDocument((await upload(bob.id, course.id, "module2-multiple-regression.docx")).documentId);
+    await resolveProposals(bob.id, course.id, "all", "accept");
+    const [topic] = await topicStates(bob.id, course.id);
+    configure();
+    expect(await generateSupplement({ userId: bob.id, courseId: course.id, topicId: topic.id })).toEqual({ ok: true });
+    const [s] = await db.select().from(schema.learnSupplements).where(eq(schema.learnSupplements.topicId, topic.id));
+    expect(s.model).toBe("mock-cheap");
+    expect(s.body.gaps.length).toBeGreaterThanOrEqual(1);
+    expect(s.body.verify.length).toBeGreaterThanOrEqual(1);
+    expect(await db.select().from(schema.learnNotes).where(eq(schema.learnNotes.topicId, topic.id))).toHaveLength(0); // never mixed into source-grounded notes
+    expect(await db.select().from(schema.questions).where(eq(schema.questions.courseId, course.id))).toHaveLength(0); // and never used to write questions
+    const [empty] = await db.insert(schema.topics).values({ userId: bob.id, courseId: course.id, name: "Zebra quantum blockchain" }).returning();
+    expect(await generateSupplement({ userId: bob.id, courseId: course.id, topicId: empty.id })).toMatchObject({ ok: false });
+    await db.update(schema.courses).set({ allowExternalAi: false }).where(eq(schema.courses.id, course.id));
+    await expect(generateSupplement({ userId: bob.id, courseId: course.id, topicId: topic.id })).rejects.toMatchObject({ code: "course_disallows_ai" });
+  }, 60_000);
+
   it("a student's own key takes precedence over the managed provider", async () => {
     await db.insert(schema.providerSettings).values({ userId: bob.id, baseUrl: `http://127.0.0.1:${LLM_PORT}/v1`, model: "mock-1", apiKeyEnc: encryptSecret(MOCK_KEY), keyHint: "…-key", dailyRequestLimit: 60, disclosureAckAt: new Date() });
     resetRateLimits();
@@ -511,6 +566,32 @@ describe("managed AI (no key needed)", () => {
     const rows = await usage();
     expect(rows.filter((r) => r.provider === "managed").length).toBe(managedBefore);
     expect(rows.filter((r) => r.provider === "byok" && r.costMicroUsd === 0).length).toBe(1);
+  });
+});
+
+describe("activity log", () => {
+  it("records events and counts, never document text, prompts or keys, and survives deleting a course", async () => {
+    const events = await db.select().from(schema.activityLog).where(eq(schema.activityLog.userId, alice.id));
+    const names = new Set(events.map((e) => e.event));
+    for (const n of ["source.created", "source.processed", "source.failed", "suggestions.accepted", "practice.started", "practice.finished", "plan.saved", "ai.call", "ai.questions"]) expect(names.has(n), n).toBe(true);
+    const failed = events.find((e) => e.event === "source.failed")!;
+    expect(failed.details).toMatchObject({ code: "type_mismatch", willRetry: false });
+    const call = events.find((e) => e.event === "ai.call" && e.details.ok === true)!;
+    expect(call.details.inTok).toBeGreaterThan(0); // token counts survive the redaction of anything named "token"
+    const dump = JSON.stringify(events);
+    // Topic names and titles are course structure and may appear; sentences from inside documents, and secrets, may not.
+    for (const secret of ["regression describes how the average value", "A residual is the observed value minus", "p-value is the probability of obtaining", "Each additional thousand dollars of advertising", MOCK_KEY, "hunter2"]) expect(dump.includes(secret), secret).toBe(false);
+    await logActivity(alice.id, "test.redaction", { details: { text: "private notes", prompt: "p", apiKey: "sk-abcdefghijklmnop", note: "visible", inTok: 7 } });
+    const [row] = await db.select().from(schema.activityLog).where(and(eq(schema.activityLog.userId, alice.id), eq(schema.activityLog.event, "test.redaction")));
+    expect(row.details).toEqual({ text: "[redacted]", prompt: "[redacted]", apiKey: "[redacted]", note: "visible", inTok: 7 });
+    await logActivity(alice.id, "test.big", { details: { blob: "x".repeat(300), many: Array.from({ length: 2000 }, (_, i) => `item-${i}`) } });
+    const [big] = await db.select().from(schema.activityLog).where(and(eq(schema.activityLog.userId, alice.id), eq(schema.activityLog.event, "test.big")));
+    expect(JSON.stringify(big.details).length).toBeLessThan(6100);
+    const course = await makeCourse(alice.id, "Soon deleted");
+    await logActivity(alice.id, "test.course", { courseId: course.id });
+    await deleteCourse(alice.id, course.id);
+    expect((await db.select().from(schema.activityLog).where(and(eq(schema.activityLog.userId, alice.id), eq(schema.activityLog.event, "course.deleted")))).length).toBeGreaterThan(0);
+    expect((await db.select().from(schema.activityLog).where(eq(schema.activityLog.event, "test.course"))).length).toBe(1); // history outlives the course
   });
 });
 

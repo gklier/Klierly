@@ -3,9 +3,10 @@ import { notFound } from "next/navigation";
 import { db, schema } from "@/db";
 import type { ProposalPayload } from "@/db/schema";
 import { autoMapDocuments } from "@/lib/ingest/pipeline";
-import { moduleNumberOf } from "@/lib/ingest/proposals";
+import { moduleNumberOf, sameTopic } from "@/lib/ingest/proposals";
 import { removeFile, removeUserFiles } from "@/lib/ingest/storage";
 import { toOrQuery } from "@/lib/retrieval";
+import { logActivity } from "@/lib/activity";
 
 /** Every read of a course goes through here: no row without the owner's id. */
 export async function getCourse(userId: string, courseId: string) {
@@ -73,7 +74,7 @@ async function applyProposal(p: typeof schema.proposals.$inferSelect) {
     if (!exists) await db.insert(schema.modules).values({ ...base, name: payload.name, position: payload.number ?? mods.length + 1 });
   } else if (payload.kind === "topic") {
     const existing = await db.select({ name: schema.topics.name }).from(schema.topics).where(eq(schema.topics.courseId, p.courseId));
-    if (!existing.some((t) => norm(t.name) === norm(payload.name))) {
+    if (!existing.some((t) => norm(t.name) === norm(payload.name) || sameTopic(t.name, payload.name))) {
       let moduleId: string | null = null;
       if (payload.documentId) {
         const [doc] = await db.select({ moduleId: schema.sourceDocuments.moduleId }).from(schema.sourceDocuments).where(eq(schema.sourceDocuments.id, payload.documentId)).limit(1);
@@ -85,6 +86,8 @@ async function applyProposal(p: typeof schema.proposals.$inferSelect) {
     const mods = await listModules(p.courseId);
     const mod = payload.moduleNumber !== undefined ? mods.find((m) => moduleNumberOf(m.name) === payload.moduleNumber) : undefined;
     await db.insert(schema.learningObjectives).values({ ...base, text: payload.text, moduleId: mod?.id ?? null, evidenceChunkId: p.evidenceChunkId });
+  } else if (payload.kind === "format") {
+    await db.insert(schema.examFormats).values({ ...base, examKey: payload.examKey, label: payload.label, questionCount: payload.questionCount ?? null, minutes: payload.minutes ?? null, points: payload.points ?? null, types: payload.types ?? [], evidenceChunkId: p.evidenceChunkId });
   } else {
     await db.insert(schema.courseDates).values({ ...base, label: payload.label, date: payload.date, dateKind: payload.dateKind, modulesCovered: payload.modulesCovered ?? null, evidenceChunkId: p.evidenceChunkId });
   }
@@ -106,9 +109,15 @@ export async function resolveProposals(userId: string, courseId: string, ids: st
     ids === "all" ? undefined : inArray(schema.proposals.id, ids.length ? ids : ["00000000-0000-0000-0000-000000000000"]),
     kinds?.length ? inArray(schema.proposals.kind, kinds) : undefined,
   );
-  if (action === "dismiss") { await db.update(schema.proposals).set({ status: "dismissed" }).where(where); return; }
+  const counts = (kinds: string[]) => kinds.reduce<Record<string, number>>((m, k) => ({ ...m, [k]: (m[k] ?? 0) + 1 }), {});
+  if (action === "dismiss") {
+    const gone = await db.update(schema.proposals).set({ status: "dismissed" }).where(where).returning({ kind: schema.proposals.kind });
+    if (gone.length) await logActivity(userId, "suggestions.dismissed", { courseId, details: { count: gone.length, kinds: counts(gone.map((g) => g.kind)) } });
+    return;
+  }
   const rows = await db.select().from(schema.proposals).where(where).orderBy(asc(schema.proposals.createdAt));
-  const rank = { module: 0, topic: 1, objective: 2, date: 3 } as const;
+  if (rows.length) await logActivity(userId, "suggestions.accepted", { courseId, details: { count: rows.length, kinds: counts(rows.map((r) => r.kind)) } });
+  const rank = { module: 0, topic: 1, objective: 2, date: 3, format: 4 } as const;
   rows.sort((a, b) => rank[a.kind] - rank[b.kind]);
   for (const p of rows) {
     await applyProposal(p);
@@ -118,10 +127,12 @@ export async function resolveProposals(userId: string, courseId: string, ids: st
 }
 
 export async function deleteCourse(userId: string, courseId: string): Promise<boolean> {
+  const [named] = await db.select({ name: schema.courses.name }).from(schema.courses).where(and(eq(schema.courses.id, courseId), eq(schema.courses.userId, userId))).limit(1);
   const docs = await db.select({ storagePath: schema.sourceDocuments.storagePath }).from(schema.sourceDocuments)
     .where(and(eq(schema.sourceDocuments.courseId, courseId), eq(schema.sourceDocuments.userId, userId)));
   const res = await db.delete(schema.courses).where(and(eq(schema.courses.id, courseId), eq(schema.courses.userId, userId))).returning({ id: schema.courses.id });
   if (!res.length) return false;
+  await logActivity(userId, "course.deleted", { courseId, details: { name: named?.name, sources: docs.length } });
   await Promise.all(docs.map((d) => removeFile(d.storagePath)));
   return true;
 }

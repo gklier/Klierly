@@ -10,14 +10,14 @@ Run on 2026-11-14 in a Linux x86_64 container: Node 22, Python 3.13, PostgreSQL 
 | --- | --- |
 | `cd worker && python -m pytest -q` | **25 passed** |
 | `cd web && npm run typecheck` / `npm run lint` | clean / clean |
-| `cd web && npm test` (real PostgreSQL + real worker + mock AI) | **76 passed** |
-| `cd web && npm run test:e2e` (production build; Chromium with the extension loaded) | **31 passed**: 17 journey, 7 single-page capture, 7 course discovery and captions |
+| `cd web && npm test` (real PostgreSQL + real worker + mock AI) | **88 passed** |
+| `cd web && npm run test:e2e` (production build; Chromium with the extension loaded) | **34 passed**: 19 journey, 7 single-page capture, 8 course discovery, captions and extension logging |
 | `cd extension && npm test` | **14 passed** |
 | `npm audit --omit=dev` (web) · `pip-audit` (worker, Phase 1) | 0 vulnerabilities · none known |
 | `docker compose config` | valid (syntax only) |
 | GitHub Actions on a clean runner (fresh install from the lockfiles) | all 4 jobs pass |
 
-Stability: the full E2E suite was run 11 times after the last test fix: 10 clean. **One run
+Stability: the full E2E suite was run 13 times after the last fixes: 12 clean. **One run
 reported an unexplained browser console error** in the journey suite; it did not reproduce in 7
 further runs and its text was not captured. Treat as an open flake.
 
@@ -34,6 +34,21 @@ further runs and its text was not captured. Treat as an open flake.
 | Exam blueprint and follow-up | unit (allocation sums, floors, damping; quota selection with top-up); E2E 10b: scope follows the plan, gaps generated, exam built to it, results offer a weak-topic drill and fresh questions |
 | Partial-result handling | found by E2E: two quick generations hit the burst limit and lost finished work; generation now keeps what was saved and reports why it stopped |
 | CI | ran on GitHub for pull request #1: worker, extension, web (types, lint, audit, integration, end-to-end) and the no-secrets check all pass. The first run exposed a broken secrets-check script (fixed); the check is proven to fail on a planted key |
+
+## Added in the second round (founder answers)
+
+| Feature | Evidence |
+| --- | --- |
+| Topics from learning objectives; near-duplicate merging | unit: the four real "Module 21" objectives (unbulleted, under a "Learning Objectives" line) become "Wilcoxon Rank Sum and Mann-Whitney test", "Kruskal Wallace test", "Rank data from other forms of data", "When to use …"; reworded duplicates merged; integration: 12 objective topics from the syllabus, nothing applied without review, a reworded heading is not suggested again |
+| Exam format from the syllabus | unit: question counts, types, minutes, points, matching to Exam 1 / Final, implausible numbers rejected; integration: two formats stored with their evidence; E2E: the plan form is prefilled with 27 questions / 75 minutes and the blueprint uses them |
+| AI "what your notes leave out" | integration: stored apart from notes, never feeds questions, refused without material or when the course disallows AI; E2E: shown in a dashed box labelled not from the course, no links, with a verify list |
+| Activity log, diagnostics download, clear | integration: events present for imports, failures, AI, practice, plan; redaction keeps token counts, drops text/prompt/key fields, caps size, survives course deletion; E2E: page filters, export holds counts and titles but no document sentences, email, password or key, and is refused without a session |
+| Extension run summaries | E2E: scan counts and structure diagnostics, per-failure reasons, caption results reach the log; no titles or page text from the extension; unknown event names and missing tokens refused |
+| NaviGator preset | E2E: choosing it fills UF's endpoint and example model from the quickstart, never the key |
+
+**Not tested against reality:** the topic and objective logic was built from the Module 21 page you
+screenshotted, but only the text visible in those screenshots; the real page may differ. The old
+sources already in your account keep the topics they got; delete them and re-import to see the new behaviour.
 
 ## Not verified — read this before relying on anything
 

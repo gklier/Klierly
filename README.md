@@ -78,17 +78,22 @@ questions, and needs no AI.
    text layer are rejected with a clear message (no OCR yet).
 3. Review **Suggestions from your materials** (modules, topics, objectives, dates — each links to the
    passage it came from). Accept, dismiss, or fix module/topic mapping by hand. **Coverage** shows gaps.
-   Headings often make poor topics; **Suggest topics with AI** (Materials → Topics) proposes real subjects for you to review.
+   Topics come from your course itself, in this order: the **learning objectives** it states (one topic each, full objective kept), then useful section headings. File names, "Plan / Report / Step 2" labels and near-duplicates are filtered. **Suggest topics with AI** (Materials → Topics) can tidy and merge them; it only reads your material, every suggestion must point at a real excerpt, and nothing is added without your review.
 4. **Practice → Generate new questions** (needs AI: included or your own), or **Use the exam blueprint** to see how many
    questions each topic should get, generate only the missing ones, and take a mock exam mixed to it. Drafts with a wrong calculation,
    no real source, duplicate wording or more than one correct answer are discarded.
 5. **Study plan → Prepare for an exam**: real exam date, modules covered, minutes per day, how sessions
-   start, optional self-ratings, exam format if announced. Unknown format is labelled, not guessed.
+   start, optional self-ratings, exam format. If your syllabus states the exam structure (questions, types, minutes,
+   points), Klierly finds it and fills it in for you to confirm; otherwise the format is labelled unknown, not guessed.
 6. Work the plan: **Start practice** on a session, or use Drill / Timed mock exam / Review mistakes / Learn.
    Tag why a miss happened. Click any source reference to see the document, page, slide or timestamp.
-7. **Progress** shows mastery by topic, mistake reasons and a readiness estimate (a heuristic, not a
+7. On a topic's Learn page, **Explain what the notes leave out** asks the AI to fill gaps in thin notes. That text is
+   general knowledge, shown separately in a dashed box labelled "AI-added · not from your course", never cited, never used to write questions.
+8. **Activity** (top bar) records what you did and what Klierly did for you; **Download diagnostics** gives a
+   JSON file of events, counts and titles (never document text or keys) to share when something needs debugging.
+9. **Progress** shows mastery by topic, mistake reasons and a readiness estimate (a heuristic, not a
    grade prediction). **Update plan** re-weights the schedule and reschedules missed days.
-8. Delete a source (its page), a course (course settings) or everything (Settings → Delete account).
+10. Delete a source (its page), a course (course settings) or everything (Settings → Delete account).
 
 ## Browser extension
 

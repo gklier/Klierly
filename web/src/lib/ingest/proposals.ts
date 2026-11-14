@@ -28,6 +28,66 @@ export function isTopicHeading(raw: string, docTitle = ""): boolean {
   return true;
 }
 
+const OBJECTIVE_VERBS = "conduct|perform|run|carry out|explain|describe|distinguish|determine|identify|interpret|compare|contrast|use|apply|calculate|compute|construct|build|create|evaluate|assess|understand|recognize|recognise|define|state|summarize|summarise|select|choose|test|estimate|predict|forecast|analyze|analyse|derive|check|diagnose|justify|decide|differentiate|formulate|write|make";
+const OBJECTIVE_START = new RegExp(`^(?:${OBJECTIVE_VERBS})\\b`, "i");
+const STOP_TOKENS = new Set(["the", "and", "for", "with", "from", "that", "this", "test", "tests", "vs", "versus", "using", "into", "statistic", "statistics"]);
+
+/** "Conduct a Kruskal Wallace test, including stating a hypothesis…" → "Kruskal Wallace test". The full objective is kept alongside. */
+export function topicFromObjective(text: string): string {
+  let t = text.replace(/\s+/g, " ").trim().replace(/[.;:]+$/, "");
+  t = t.replace(/,?\s+(including|such as|e\.g\.|by|in order to|so that)\b.*$/i, "");
+  const when = /^(?:determine|decide|identify|recognize|recognise|know)\s+when\s+(?:to\s+)?(?:use|apply)\s+(?:the\s+)?(.+)$/i.exec(t);
+  if (when) t = `When to use ${when[1].replace(/\s+(appropriately|correctly|properly)$/i, "")}`;
+  else {
+    t = t.replace(new RegExp(`^(?:${OBJECTIVE_VERBS})(?:\\s+and\\s+(?:${OBJECTIVE_VERBS}))?\\s+`, "i"), "").replace(/^(?:an?|the|how to|what|why)\s+/i, "").replace(/\s+(appropriately|correctly|properly)$/i, "");
+  }
+  t = t.trim();
+  if (t.length > 80) t = t.slice(0, 80).replace(/\s+\S*$/, "");
+  return t ? t.charAt(0).toUpperCase() + t.slice(1) : text.slice(0, 80);
+}
+
+const topicTokens = (s: string) => new Set(norm(s).split(" ").filter((w) => w.length > 2 && !STOP_TOKENS.has(w)));
+
+/** Do two topic names describe the same subject? Token overlap, forgiving of "Test"/"Statistic" and word order. */
+export function sameTopic(a: string, b: string): boolean {
+  const A = topicTokens(a), B = topicTokens(b);
+  if (!A.size || !B.size) return norm(a) === norm(b);
+  let inter = 0;
+  for (const w of A) if (B.has(w)) inter++;
+  return inter / (A.size + B.size - inter) >= 0.6 || (inter >= 2 && inter / Math.min(A.size, B.size) >= 0.85);
+}
+
+export type ExamFacts = { questionCount?: number; minutes?: number; points?: number; types?: string[] };
+const TYPE_WORDS: [RegExp, string][] = [[/multiple[- ]choice|\bmcq?\b/i, "multiple choice"], [/true\s*\/?\s*false/i, "true/false"], [/short[- ]answer/i, "short answer"], [/free[- ]response|essay/i, "free response"], [/numeric|calculation/i, "numeric"], [/\bproblems?\b/i, "problems"]];
+
+/** Exam structure stated in one line of a syllabus: how many questions, of what kind, how long, worth how much. */
+export function parseExamFormat(line: string): ExamFacts | null {
+  if (!EXAM_RE.test(line) || line.length > 400) return null;
+  const facts: ExamFacts = {};
+  const total = /(\d{1,3})\s+(?:total\s+)?(?:exam\s+)?questions?\b/i.exec(line);
+  const typed = [...line.matchAll(/(\d{1,3})\s*(?:[-–]\s*)?(multiple[- ]choice|true\s*\/?\s*false|short[- ]answer|free[- ]response|essay|numeric|calculation|problems?|questions?)\b/gi)];
+  const sum = typed.reduce((n, m) => n + Number(m[1]), 0);
+  const q = total ? Number(total[1]) : sum;
+  if (q >= 1 && q <= 200) facts.questionCount = q;
+  const types = TYPE_WORDS.filter(([re]) => re.test(line)).map(([, name]) => name);
+  if (types.length) facts.types = types;
+  const min = /(\d{1,3})\s*(?:minutes?|mins?)\b/i.exec(line), hrs = /(\d(?:\.\d)?)\s*(?:hours?|hrs?)\b/i.exec(line);
+  const minutes = min ? Number(min[1]) : hrs ? Math.round(Number(hrs[1]) * 60) : null;
+  if (minutes && minutes >= 5 && minutes <= 300) facts.minutes = minutes;
+  const pts = /(\d{1,4})\s*points?\b/i.exec(line);
+  if (pts && Number(pts[1]) >= 1) facts.points = Number(pts[1]);
+  return facts.questionCount || facts.minutes ? facts : null;
+}
+
+/** "exam 1", "midterm", "final" — so a format line can be matched to the right exam. */
+export function examKeyOf(line: string): string | null {
+  const m = /\b(exam|test|quiz)\s*#?\s*(\d)\b|\b(midterm|mid-term)\s*(?:exam)?\s*#?\s*(\d)?\b|\b(final)(?:\s+exam)?\b/i.exec(line);
+  if (!m) return null;
+  if (m[1]) return `${m[1].toLowerCase()} ${m[2]}`;
+  if (m[3]) return m[4] ? `midterm ${m[4]}` : "midterm";
+  return "final";
+}
+
 const MONTHS = ["january", "february", "march", "april", "may", "june", "july", "august", "september", "october", "november", "december"];
 const MONTH_RE = "(jan(?:uary)?|feb(?:ruary)?|mar(?:ch)?|apr(?:il)?|may|jun(?:e)?|jul(?:y)?|aug(?:ust)?|sep(?:t(?:ember)?)?|oct(?:ober)?|nov(?:ember)?|dec(?:ember)?)";
 const DATE_TEXT_RE = new RegExp(`\\b${MONTH_RE}\\.?\\s+(\\d{1,2})(?:st|nd|rd|th)?(?:,?\\s+(\\d{4}))?\\b`, "i");
@@ -111,10 +171,25 @@ export function proposeFromChunks(doc: { id: string; title: string }, chunks: Ch
       if (OBJECTIVES_RE.test(line)) { inObjectives = true; continue; }
       if (inObjectives) {
         const b = BULLET_RE.exec(line);
-        if (b) { put({ kind: "objective", text: b[1].trim(), moduleNumber: currentModule }, norm(b[1]), c.ordinal); continue; }
-        inObjectives = false;
+        // Bulleted, or a plain sentence that starts with an objective verb ("Conduct a Kruskal Wallace test…").
+        const text = b ? b[1].trim() : OBJECTIVE_START.test(line) && line.length >= 20 && line.length <= 400 ? line.replace(/^[-*•–]\s*/, "").trim() : null;
+        if (text) {
+          put({ kind: "objective", text, moduleNumber: currentModule }, norm(text), c.ordinal);
+          // The course's own objectives are the best topic list there is: one topic per objective, full text kept.
+          const name = topicFromObjective(text);
+          if (isTopicHeading(name) || name.split(" ").length >= 2) put({ kind: "topic", name, documentId: doc.id, via: "objective", detail: text }, norm(name), c.ordinal);
+          continue;
+        }
+        // A short line without a verb ("Resources", "Overview") ends the objectives list.
+        if (line.split(" ").length <= 4 || BULLET_RE.test(line) === false) inObjectives = false;
       }
       const isExam = EXAM_RE.test(line);
+      const facts = isExam ? parseExamFormat(line) : null;
+      if (facts) {
+        const key = examKeyOf(line);
+        const label = line.replace(/\s*\|\s*/g, " — ").replace(/[.\s]+$/, "").slice(0, 240);
+        put({ kind: "format", label, examKey: key, ...facts }, `${key ?? "any"}:${facts.questionCount ?? 0}:${facts.minutes ?? 0}`, c.ordinal);
+      }
       if ((isExam || DEADLINE_RE.test(line)) && line.length <= 200) {
         const d = parseDateInLine(line, opts.termYear);
         if (d) {
@@ -132,7 +207,7 @@ export function proposeFromChunks(doc: { id: string; title: string }, chunks: Ch
       const key = norm(base);
       if (!seenHeadings.has(key)) {
         seenHeadings.add(key);
-        if (isTopicHeading(base, doc.title)) {
+        if (isTopicHeading(base, doc.title) && ![...drafts.values()].some((d) => d.payload.kind === "topic" && sameTopic(d.payload.name, base))) {
           put({ kind: "topic", name: base.replace(/^worked example:\s*/i, "").replace(/^\w/, (ch) => ch.toUpperCase()), documentId: doc.id }, key, c.ordinal);
           topicCount++;
         }

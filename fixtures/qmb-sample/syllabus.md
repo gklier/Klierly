@@ -59,6 +59,12 @@ Exam 1: December 4, 2026 — covers Modules 1–3.
 
 Final Exam: December 15, 2026 — covers Modules 1–4.
 
+## Exam format (fictional)
+
+Exam 1 has 25 multiple-choice questions and 2 free-response problems, 75 minutes, 100 points. A calculator and a formula sheet are allowed.
+
+The Final Exam has 40 multiple-choice questions and 3 problems, 2 hours.
+
 ## Grading (fictional)
 
 Homework 20%, Exam 1 35%, Final Exam 45%.

@@ -75,7 +75,9 @@ test("4. review suggestions drawn from the materials and accept them", async () 
   const sugg = page.getByRole("region", { name: /Suggestions from your materials/ });
   await expect(sugg.getByText("Module 3: Indicator Variables and Interactions")).toBeVisible();
   await expect(sugg.getByText(/Exam 1 — covers Modules 1–3/)).toBeVisible();
-  await expect(sugg.getByText("Interpret a partial slope while holding the other predictors fixed.")).toBeVisible();
+  await expect(sugg.getByText("Interpret a partial slope while holding the other predictors fixed.", { exact: true })).toBeVisible();
+  await expect(sugg.getByText(/Exam 1 has 25 multiple-choice questions and 2 free-response problems/)).toBeVisible(); // exam structure from the syllabus
+  await expect(sugg.getByText("From the objective: Interpret a partial slope while holding the other predictors fixed.")).toBeVisible(); // objectives become topics
   await sugg.getByRole("button", { name: "Dismiss Topic: Stepwise selection caveats" }).click();
   await expect(sugg.getByText("Stepwise selection caveats")).toHaveCount(0);
   await sugg.getByRole("button", { name: "Accept all" }).click();
@@ -172,6 +174,13 @@ test("8. generate source-grounded questions and a study note without entering a 
 
 test("8b. optional own provider: a bad key fails transparently, a good one connects and takes over, removing it returns to the included AI", async () => {
   await page.goto("/settings");
+  // UF NaviGator preset: address and example model from UF's quickstart; the key is never prefilled.
+  await page.getByLabel("Type").selectOption("navigator-experimental");
+  await expect(page.getByLabel("Base URL")).toHaveValue("https://api.ai.it.ufl.edu/v1");
+  await expect(page.getByLabel("Model ID")).toHaveValue("llama-3.1-8b-instruct");
+  await expect(page.getByLabel("API key")).toHaveValue("");
+  await page.getByLabel("Type").selectOption("openai-compatible");
+  await expect(page.getByLabel("Base URL")).toHaveValue("");
   await page.getByLabel("Base URL").fill("http://127.0.0.1:4012/v1");
   await page.getByLabel("Model ID").fill("mock-1");
   await page.getByLabel("API key").fill("definitely-wrong-key");
@@ -200,8 +209,13 @@ test("8b. optional own provider: a bad key fails transparently, a good one conne
 
 test("9. build a study plan that respects date, modules and minutes", async () => {
   await page.goto(`${courseUrl}/plan`);
-  await page.getByRole("link", { name: "Use this date and scope" }).first().click();
+  await expect(page.getByText("Format in your syllabus: 27 questions, 75 minutes, 100 points, multiple choice, free response, problems")).toBeVisible();
+  await page.getByRole("link", { name: "Use this date, scope and format" }).first().click();
   await expect(page.getByLabel("Exam date")).toHaveValue("2026-12-04");
+  await expect(page.getByText("Filled in from your syllabus.")).toBeVisible();
+  await expect(page.getByLabel("Questions", { exact: true })).toHaveValue("27");
+  await expect(page.getByLabel("Minutes", { exact: true })).toHaveValue("75");
+  await expect(page.getByLabel(/My instructor has announced the format/)).toBeChecked();
   await expect(page.getByRole("checkbox", { name: /Module 4/ })).not.toBeChecked();
   await expect(page.getByRole("checkbox", { name: /Module 1/ })).toBeChecked();
   const d = new Date(Date.now() + 12 * 86400_000);
@@ -211,7 +225,7 @@ test("9. build a study plan that respects date, modules and minutes", async () =
   await page.getByLabel(/^Target grade/).fill("A-");
   await page.getByRole("button", { name: "Build my study plan" }).click();
   await expect(page.getByText("35 minutes a day · aiming for A-")).toBeVisible();
-  await expect(page.getByText("The exam format (question types, length, weights) is not confirmed")).toBeVisible();
+  await expect(page.getByText("The exam format (question types, length, weights) is not confirmed")).toHaveCount(0); // it came from the syllabus
   await expect(page.getByText("Today · ")).toBeVisible();
   await expect(page.getByText("Timed mock exam on all covered topics")).toBeVisible();
   const minutes = (await page.locator("ol > li > div > span.tnum").allInnerTexts()).map((t) => parseInt(t, 10));
@@ -275,11 +289,12 @@ test("10b. exam blueprint: topic weights from the materials, gaps filled, exam b
   await page.getByRole("link", { name: "Use the exam blueprint" }).click();
   await expect(page.getByRole("heading", { name: "Practice exam blueprint" })).toBeVisible();
   await expect(page.getByText("It is a study aid, not your instructor's exam design.")).toBeVisible();
-  await expect(page.getByText("The real exam format is not confirmed")).toBeVisible();
+  await expect(page.getByText("Length uses the format you confirmed in your study plan (27 questions, 75 minutes).")).toBeVisible();
   const total = Number(await page.getByTestId("bp-total").innerText());
   const planned = (await page.locator("tbody tr td:nth-child(3)").allInnerTexts()).map(Number);
   expect(planned.reduce((a, b) => a + b, 0)).toBe(total);
-  expect(planned.every((n) => n >= 1)).toBe(true);
+  expect(total).toBe(27); // the exam structure stated in the syllabus
+  expect(planned.filter((n) => n >= 1).length).toBe(Math.min(planned.length, total));
   await expect(page.getByText(/Moving averages|Exponential smoothing/)).toHaveCount(0); // plan scope: Module 4 is not in this exam
   const missingBefore = Number(await page.getByTestId("bp-missing").innerText());
   expect(missingBefore).toBeGreaterThan(0);
@@ -307,6 +322,44 @@ test("10b. exam blueprint: topic weights from the materials, gaps filled, exam b
   await expect(page.getByTestId("practice-runner")).toBeVisible();
   await expect(page.getByText("Drill", { exact: true })).toBeVisible();
   await page.getByRole("link", { name: "Exit" }).click();
+});
+
+test("10c. AI fills the gaps, clearly separated from the course material", async () => {
+  await page.goto(`${courseUrl}/practice`);
+  await page.getByRole("region", { name: "Learn" }).getByRole("link").first().click();
+  await expect(page.getByRole("heading", { name: "What your notes leave out" })).toBeVisible();
+  await page.getByRole("button", { name: "Explain what the notes leave out" }).click();
+  const box = page.getByTestId("supplement");
+  await expect(box).toBeVisible({ timeout: 30_000 });
+  await expect(box).toContainText("AI-added · general knowledge · not from your course");
+  await expect(box).toContainText("Not checked against your course or any textbook, and it can be wrong.");
+  await expect(box).toContainText("Worth checking with your instructor or textbook");
+  await expect(box.getByRole("link")).toHaveCount(0); // it is never cited as if it were a source
+});
+
+test("10d. the activity log shows what happened, and the diagnostics file holds counts, not content", async () => {
+  await page.goto("/activity");
+  const list = page.getByTestId("activity-list");
+  for (const label of ["Imported a source", "Source processed", "Source could not be processed", "Accepted suggestions", "AI request", "Generated questions", "Saved study plan", "Finished practice", "Saved AI provider"]) await expect(list.getByText(label).first(), label).toBeVisible();
+  await page.getByRole("link", { name: "Imports" }).click();
+  await expect(page.getByTestId("activity-list").getByText("AI request")).toHaveCount(0);
+  await page.goto("/activity");
+  const res = await page.request.get("/api/activity/export");
+  expect(res.status()).toBe(200);
+  expect(res.headers()["content-disposition"]).toContain("klierly-diagnostics-");
+  const text = await res.text();
+  const body = JSON.parse(text);
+  expect(body.format).toBe("klierly-diagnostics/1");
+  expect(body.environment).toMatchObject({ managedAiConfigured: true, workerReachable: true });
+  expect(body.courses[0]).toMatchObject({ name: "QMB 3250 – Statistics for Business Decisions" });
+  expect(body.courses[0].docs.ready).toBeGreaterThanOrEqual(3);
+  expect(body.courses[0].chunks).toBeGreaterThan(10);
+  expect(body.events.length).toBeGreaterThan(30);
+  const failed = body.events.find((e: { event: string }) => e.event === "source.failed");
+  expect(failed.details).toMatchObject({ code: "type_mismatch", willRetry: false });
+  // Counts and labels, never what the documents say, what was typed, an email address or a key.
+  for (const never of ["founder@e2e.test", "e2e-password-12345", "test-key", "definitely-wrong-key", "An indicator variable takes the value 1", "A p-value is not the probability", "Question 2 of 10"]) expect(text.includes(never), never).toBe(false);
+  expect((await (await page.context().request.get("/api/activity/export", { headers: { cookie: "" } })).status())).toBe(401);
 });
 
 test("11. timed mock exam grades only after submission", async () => {

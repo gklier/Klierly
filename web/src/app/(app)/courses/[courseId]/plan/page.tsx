@@ -8,7 +8,7 @@ import { Icon } from "@/components/icons";
 import { requireUser } from "@/lib/auth";
 import { getCourse, listModules, topicStates } from "@/lib/courses";
 import { addDays, daysBetween, formatDate, today } from "@/lib/dates";
-import { moduleNumberOf } from "@/lib/ingest/proposals";
+import { examKeyOf, moduleNumberOf } from "@/lib/ingest/proposals";
 import { getPlan } from "@/lib/plan/service";
 
 export const metadata = { title: "Study plan" };
@@ -18,13 +18,14 @@ const KIND: Record<PlanSessionKind, { label: string; tone: string }> = {
   mixed: { label: "Mixed practice", tone: "" }, mock: { label: "Mock exam", tone: "badge-warn" }, wrap: { label: "Wrap-up", tone: "badge-good" },
 };
 
-export default async function PlanPage({ params, searchParams }: { params: Promise<{ courseId: string }>; searchParams: Promise<{ edit?: string; date?: string; mods?: string }> }) {
+export default async function PlanPage({ params, searchParams }: { params: Promise<{ courseId: string }>; searchParams: Promise<{ edit?: string; date?: string; mods?: string; fq?: string; fm?: string; fn?: string; fc?: string }> }) {
   const user = await requireUser();
   const course = await getCourse(user.id, (await params).courseId);
   const sp = await searchParams;
-  const [data, modules, topics, dates] = await Promise.all([
+  const [data, modules, topics, dates, formats] = await Promise.all([
     getPlan(user.id, course.id), listModules(course.id), topicStates(user.id, course.id),
     db.select().from(schema.courseDates).where(eq(schema.courseDates.courseId, course.id)).orderBy(asc(schema.courseDates.date)),
+    db.select().from(schema.examFormats).where(eq(schema.examFormats.courseId, course.id)).orderBy(asc(schema.examFormats.createdAt)),
   ]);
   const now = today();
   const plan = data?.plan;
@@ -38,6 +39,12 @@ export default async function PlanPage({ params, searchParams }: { params: Promi
   const preDate = sp.date && /^\d{4}-\d{2}-\d{2}$/.test(sp.date) ? sp.date : plan?.examDate ?? course.examDate ?? "";
   const preMods = sp.mods ? new Set(modules.filter((m) => sp.mods!.split(",").map(Number).includes(moduleNumberOf(m.name) ?? -1)).map((m) => m.id)) : new Set(plan?.moduleIds ?? modules.map((m) => m.id));
   const fromSyllabus = sp.date ? examDates.find((d) => d.date === sp.date) : undefined;
+  // Exam structure the syllabus states: matched to its exam by name, else the general description.
+  const formatFor = (label: string) => { const key = examKeyOf(label); return formats.find((f) => key && f.examKey === key) ?? formats.find((f) => f.examKey === null); };
+  const fmtText = (f: (typeof formats)[number]) => [f.questionCount && `${f.questionCount} questions`, f.minutes && `${f.minutes} minutes`, f.points && `${f.points} points`, f.types.length > 0 && f.types.join(", ")].filter(Boolean).join(", ");
+  const fmtParams = (f?: (typeof formats)[number]) => (f ? `&fc=1${f.questionCount ? `&fq=${f.questionCount}` : ""}${f.minutes ? `&fm=${f.minutes}` : ""}&fn=${encodeURIComponent(`From your syllabus: ${f.label}`.slice(0, 300))}` : "");
+  const matched = new Set(examDates.map((d) => formatFor(d.label)?.id));
+  const prefillFormat = sp.fc === "1";
 
   const upcoming = sessions.filter((s) => s.date >= now);
   const missed = sessions.filter((s) => s.date < now && s.status === "planned");
@@ -64,7 +71,7 @@ export default async function PlanPage({ params, searchParams }: { params: Promi
       </div>
 
       {showForm && (
-        <ActionForm key={`${sp.date ?? ""}:${sp.mods ?? ""}`} action={savePlanAction} className="panel space-y-5 p-5">
+        <ActionForm key={`${sp.date ?? ""}:${sp.mods ?? ""}:${sp.fq ?? ""}:${sp.fm ?? ""}`} action={savePlanAction} className="panel space-y-5 p-5">
           <input type="hidden" name="courseId" value={course.id} />
           <h2 className="text-lg font-semibold">Prepare for an exam</h2>
 
@@ -73,9 +80,10 @@ export default async function PlanPage({ params, searchParams }: { params: Promi
               <p className="font-semibold">Exam dates found in your materials</p>
               <ul className="mt-1 space-y-1">
                 {examDates.map((d) => (
-                  <li key={d.id}>{d.label} <Link className="link" href={`${base}?edit=1&date=${d.date}${d.modulesCovered?.length ? `&mods=${d.modulesCovered.join(",")}` : ""}`}>Use this date{d.modulesCovered?.length ? " and scope" : ""}</Link></li>
+                  <li key={d.id}>{d.label}{formatFor(d.label) && <span className="block text-muted">Format in your syllabus: {fmtText(formatFor(d.label)!)}</span>} <Link className="link" href={`${base}?edit=1&date=${d.date}${d.modulesCovered?.length ? `&mods=${d.modulesCovered.join(",")}` : ""}${fmtParams(formatFor(d.label))}`}>Use this date{d.modulesCovered?.length ? ", scope" : ""}{formatFor(d.label) ? " and format" : ""}</Link></li>
                 ))}
               </ul>
+              {formats.filter((f) => !matched.has(f.id)).map((f) => <p key={f.id} className="mt-1">Exam format in your syllabus: {f.label} ({fmtText(f)}). <Link className="link" href={`${base}?edit=1${fmtParams(f)}`}>Use this format</Link></p>)}
               <p className="mt-1 text-muted">Check them against your instructor&apos;s latest announcement — syllabi change.</p>
             </div>
           )}
@@ -130,11 +138,12 @@ export default async function PlanPage({ params, searchParams }: { params: Promi
 
           <fieldset className="rounded-lg border border-line p-3">
             <legend className="px-1 text-sm font-semibold">Exam format</legend>
-            <label className="flex items-start gap-2.5 text-sm"><input type="checkbox" name="formatConfirmed" defaultChecked={plan?.examFormat.confirmed} className="mt-1 accent-[var(--accent)]" /><span>My instructor has announced the format. <span className="text-muted">Leave unticked if you are not sure — Klierly will not guess it, and the mock exam will use a default length.</span></span></label>
+            {prefillFormat && <p className="notice notice-good mb-2 text-sm">Filled in from your syllabus. Syllabi change, so check it against your instructor&apos;s latest announcement.</p>}
+            <label className="flex items-start gap-2.5 text-sm"><input type="checkbox" name="formatConfirmed" defaultChecked={prefillFormat || plan?.examFormat.confirmed} className="mt-1 accent-[var(--accent)]" /><span>My instructor has announced the format. <span className="text-muted">Leave unticked if you are not sure — Klierly will not guess it, and the mock exam will use a default length.</span></span></label>
             <div className="mt-3 grid gap-3 sm:grid-cols-[8rem_8rem_1fr]">
-              <div><label className="label" htmlFor="fq">Questions</label><input id="fq" name="formatQuestions" type="number" min={1} max={200} className="input" defaultValue={plan?.examFormat.questionCount ?? ""} /></div>
-              <div><label className="label" htmlFor="fm">Minutes</label><input id="fm" name="formatMinutes" type="number" min={1} max={600} className="input" defaultValue={plan?.examFormat.minutes ?? ""} /></div>
-              <div><label className="label" htmlFor="fn">Notes</label><input id="fn" name="formatNotes" className="input" maxLength={500} placeholder="e.g. multiple choice, formula sheet allowed" defaultValue={plan?.examFormat.notes ?? ""} /></div>
+              <div><label className="label" htmlFor="fq">Questions</label><input id="fq" name="formatQuestions" type="number" min={1} max={200} className="input" defaultValue={sp.fq ?? plan?.examFormat.questionCount ?? ""} /></div>
+              <div><label className="label" htmlFor="fm">Minutes</label><input id="fm" name="formatMinutes" type="number" min={1} max={600} className="input" defaultValue={sp.fm ?? plan?.examFormat.minutes ?? ""} /></div>
+              <div><label className="label" htmlFor="fn">Notes</label><input id="fn" name="formatNotes" className="input" maxLength={500} placeholder="e.g. multiple choice, formula sheet allowed" defaultValue={sp.fn ?? plan?.examFormat.notes ?? ""} /></div>
             </div>
           </fieldset>
 

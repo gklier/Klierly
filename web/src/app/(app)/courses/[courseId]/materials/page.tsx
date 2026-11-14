@@ -18,11 +18,12 @@ import { locationLabel, searchChunks } from "@/lib/retrieval";
 export const metadata = { title: "Materials" };
 
 const KIND_LABEL = { file: "File", paste: "Pasted", web: "Web capture" } as const;
-const PROPOSAL_LABEL: Record<ProposalPayload["kind"], string> = { module: "Module", topic: "Topic", objective: "Learning objective", date: "Date" };
+const PROPOSAL_LABEL: Record<ProposalPayload["kind"], string> = { module: "Module", topic: "Topic", objective: "Learning objective", date: "Date", format: "Exam format" };
 
 function proposalText(p: ProposalPayload): string {
   if (p.kind === "module" || p.kind === "topic") return p.name;
   if (p.kind === "objective") return p.text;
+  if (p.kind === "format") return `${p.label} — ${[p.questionCount && `${p.questionCount} questions`, p.minutes && `${p.minutes} minutes`, p.points && `${p.points} points`, p.types?.length && p.types.join(", ")].filter(Boolean).join(", ")}`;
   return `${p.label}${p.yearAssumed ? " (year assumed from the term)" : ""}`;
 }
 
@@ -56,7 +57,7 @@ export default async function MaterialsPage({ params, searchParams }: { params: 
   const groups = [...modules.map((m) => ({ id: m.id as string | null, name: m.name })), { id: null, name: modules.length ? "Not assigned to a module" : "All sources" }];
   const topicsWithout = topics.filter((t) => !t.hasSources);
   const emptyModules = modules.filter((m) => !docs.some((d) => d.moduleId === m.id));
-  const order = { module: 0, date: 1, topic: 2, objective: 3 } as const;
+  const order = { module: 0, date: 1, format: 2, topic: 3, objective: 4 } as const;
   const sortedProposals = [...proposals].sort((a, b) => order[a.kind] - order[b.kind]);
   const Evidence = ({ id }: { id: string | null }) => {
     const e = id ? evidenceById.get(id) : undefined;
@@ -88,9 +89,10 @@ export default async function MaterialsPage({ params, searchParams }: { params: 
           <ul className="mt-3 divide-y divide-line">
             {sortedProposals.map((p) => (
               <li key={p.id} className="flex flex-wrap items-center gap-x-3 gap-y-1 py-2.5">
-                <span className="badge w-36 justify-center">{PROPOSAL_LABEL[p.kind]}{p.payload.kind === "date" ? ` · ${p.payload.dateKind}` : ""}{p.payload.kind === "topic" && p.payload.via === "ai" ? " · AI" : ""}</span>
+                <span className="badge w-36 justify-center">{PROPOSAL_LABEL[p.kind]}{p.payload.kind === "date" ? ` · ${p.payload.dateKind}` : ""}{p.payload.kind === "topic" && p.payload.via === "ai" ? " · AI" : ""}{p.payload.kind === "topic" && p.payload.via === "objective" ? " · objective" : ""}</span>
                 <div className="min-w-0 flex-1 basis-64">
                   <p className="text-sm">{proposalText(p.payload)}{p.payload.kind === "date" && <span className="tnum text-muted"> → {formatDate(p.payload.date, { month: "short", day: "numeric", year: "numeric" })}</span>}</p>
+                  {p.payload.kind === "topic" && p.payload.detail && <p className="text-xs text-muted">From the objective: {p.payload.detail}</p>}
                   <Evidence id={p.evidenceChunkId} />
                 </div>
                 <form action={resolveProposalAction} className="flex gap-1.5">

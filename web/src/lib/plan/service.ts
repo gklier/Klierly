@@ -3,6 +3,7 @@ import { db, schema } from "@/db";
 import type { ExamFormat } from "@/db/schema";
 import { topicStates } from "@/lib/courses";
 import { today as todayStr } from "@/lib/dates";
+import { logActivity } from "@/lib/activity";
 import { buildSchedule, type PlanTopic } from "./schedule";
 
 export type PlanForm = {
@@ -20,7 +21,9 @@ export async function getPlan(userId: string, courseId: string) {
 export async function savePlan(userId: string, courseId: string, form: PlanForm) {
   const values = { ...form, userId, courseId, generatedAt: new Date() };
   await db.insert(schema.examPlans).values(values).onConflictDoUpdate({ target: schema.examPlans.courseId, set: values });
-  return regeneratePlan(userId, courseId);
+  const r = await regeneratePlan(userId, courseId);
+  await logActivity(userId, "plan.saved", { courseId, details: { examDate: form.examDate, minutesPerDay: form.minutesPerDay, modules: form.moduleIds.length, formatConfirmed: form.examFormat.confirmed, formatQuestions: form.examFormat.questionCount, formatMinutes: form.examFormat.minutes, sessions: r?.sessions, warnings: r?.warnings.length } });
+  return r;
 }
 
 /**

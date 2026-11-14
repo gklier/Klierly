@@ -85,7 +85,10 @@ export function readModulesPage() {
     modules.push({ id: m.dataset.moduleId || (m.id || '').replace(/^context_module_/, '') || String(modules.length), name: name.slice(0, 120), locked: moduleLocked, items });
   }
   const more = Boolean(document.querySelector('.module-items-lazy-loading, .loading-more-modules, #context_modules_loading, [data-testid="modules-load-more"]'));
-  return { url: location.href, isModulesPage: Boolean(document.querySelector('#context_modules')) || modules.length > 0, modules, more, pageTitle: document.title };
+  // Structure counts only (no text): lets a failed scan on a site we have not seen be diagnosed from the log.
+  const count = (sel) => { try { return document.querySelectorAll(sel).length; } catch { return -1; } };
+  const diag = { modulesRoot: count('#context_modules'), moduleEls: count('.context_module'), itemEls: count('.context_module_item'), titleLinks: count('a.ig-title, a.item_link'), iframes: count('iframe'), lazy: more, hasMain: count('main, [role="main"]') };
+  return { url: location.href, isModulesPage: Boolean(document.querySelector('#context_modules')) || modules.length > 0, modules, more, pageTitle: document.title, diag };
 }
 
 /**

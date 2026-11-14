@@ -41,6 +41,17 @@ unreleased items, external tools. The server repeats the assessment check on eve
 - **Video platforms.** Caption reading works for players that expose standard text tracks or a
   visible transcript panel. Players that draw captions themselves expose nothing to read.
 
+## Mediasite (UF lectures)
+
+UF lectures are usually Mediasite videos embedded in Canvas. The caption reader handles standard
+HTML caption tracks and visible transcript panels, in embedded frames after a per-site permission.
+Whether Mediasite exposes either in a way the extension can read is **unknown until tested on a real
+page**. The founder has a working method for pulling transcripts; once shared it should be reviewed
+against the same rules as everything else here: reading what the student's own browser shows, in
+the student's own session, with their permission. Anything that reads cookies or stored tokens,
+calls undocumented endpoints in a way that sidesteps the player's own access controls, or downloads
+media would not be added, and the reason would be given.
+
 ## Adding another LMS
 
 `extension/src/lms/` holds one adapter per platform with the same shape

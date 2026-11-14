@@ -120,6 +120,14 @@ export function safeHttpUrl(value) {
   }
 }
 
+/**
+ * Report a run summary to the activity log. Counts and fixed labels only, never page text.
+ * Fire-and-forget: a logging failure must never affect what the student is doing.
+ */
+export async function logEvent(settings, event, details, courseId = null) {
+  try { await request(settings, '/api/ext/log', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ event, courseId, details }) }); } catch { /* ignored on purpose */ }
+}
+
 /** GET /api/ext/courses/:id/sources — what was already imported from a course site (ids and status only). */
 export async function fetchSources(settings, courseId) {
   const body = await request(settings, `/api/ext/courses/${encodeURIComponent(courseId)}/sources`);

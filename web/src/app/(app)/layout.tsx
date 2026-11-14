@@ -17,6 +17,7 @@ export default async function AppLayout({ children }: { children: React.ReactNod
           <Link href="/" className="mr-1 text-[1.05rem] font-semibold tracking-tight sm:mr-3" aria-label="Klierly — your courses">Klierly</Link>
           <nav aria-label="Main" className="flex items-center gap-1">
             <Link href="/" className="btn btn-quiet btn-sm max-sm:hidden">Courses</Link>
+            <Link href="/activity" className="btn btn-quiet btn-sm max-sm:hidden">Activity</Link>
             <Link href="/settings" className="btn btn-quiet btn-sm">Settings</Link>
             {env.adminEmails.includes(user.email) && <Link href="/admin" className="btn btn-quiet btn-sm max-sm:hidden">Operator</Link>}
           </nav>

@@ -14,6 +14,7 @@ export default function PrivacyPage() {
           <li>Your account: name, email and a salted hash of your password.</li>
           <li>What you import: the original files, the text extracted from them, and a search index of that text.</li>
           <li>What you do: courses, modules, topics, study plans, practice answers, timing, mistake tags and question reports.</li>
+          <li>An activity log of your own actions and what the system did for you (imports, extension runs, AI requests, practice, settings): events, counts and the titles of your sources and topics, never what your documents say, prompts, answers or keys. You can read, download and clear it on the Activity page; it is deleted with your account.</li>
           <li>If you connect an AI provider: its address, model name, and your API key encrypted on the server; counts of requests and tokens.</li>
         </ul><p>All of it is tied to your account. Other users cannot see it, there is no shared library, and nothing you import is published.</p></section>
         <section><h2>Where your data goes</h2><ul>

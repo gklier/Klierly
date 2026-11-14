@@ -3,6 +3,7 @@ import { and, desc, eq, gte, sql } from "drizzle-orm";
 import { db, schema } from "@/db";
 import { deleteAccountAction, removeProvider, revokeExtensionToken, saveProvider, testProvider } from "@/app/actions/settings";
 import { ActionForm, Submit } from "@/components/forms";
+import { PresetSelect } from "@/components/preset-select";
 import { TokenForm } from "@/components/token-form";
 import { aiStatus, getProvider, usageToday } from "@/lib/ai/provider";
 import { requireUser } from "@/lib/auth";
@@ -62,11 +63,8 @@ export default async function SettingsPage() {
           <h3 className="font-semibold">{provider ? "Change your own connection" : "Connect your own provider (optional)"}</h3>
           <div>
             <label className="label" htmlFor="preset">Type</label>
-            <select id="preset" name="preset" className="input" defaultValue={provider?.preset ?? "openai-compatible"}>
-              <option value="openai-compatible">OpenAI-compatible API (any provider or a self-hosted model)</option>
-              <option value="navigator-experimental">UF NaviGator Toolkit — experimental, unverified</option>
-            </select>
-            <p className="help"><strong>NaviGator:</strong> marked experimental. Before using it, confirm in UF&apos;s current terms that your personal allocation may be used with a third-party tool like this, and take the base URL and model ID from UF&apos;s own documentation. Klierly does not assume either.</p>
+            <PresetSelect defaultValue={provider?.preset ?? "openai-compatible"} />
+            <p className="help"><strong>UF NaviGator Toolkit</strong> (experimental). Create a personal key at <a className="link" href="https://api.ai.it.ufl.edu/ui" target="_blank" rel="noopener noreferrer">api.ai.it.ufl.edu/ui</a> (UF login → Create New Key → choose models). Choosing it above fills in UF&apos;s address and an example model from UF&apos;s quickstart; use the model your key can access. Paste the key below, in this box only, and never share it. Personal keys reach UF-hosted models, which are mostly smaller open models, so more generated drafts may fail Klierly&apos;s checks. UF&apos;s pages do not say whether personal keys may be used with third-party tools: this is your own key for your own study, and it is not available to other students.</p>
           </div>
           <div className="grid gap-4 sm:grid-cols-2">
             <div><label className="label" htmlFor="baseUrl">Base URL</label><input id="baseUrl" name="baseUrl" className="input" required placeholder="https://api.example.com/v1" defaultValue={provider?.baseUrl ?? ""} autoComplete="off" />

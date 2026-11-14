@@ -242,6 +242,32 @@ test("lecture captions: text tracks on the page and inside an embedded player ar
   await app.goto(`/courses/${courseId}/materials`);
 });
 
+test("the extension's run summaries reach the activity log as counts and reasons, never page content", async () => {
+  const res = await app.request.get("/api/activity/export");
+  const text = await res.text();
+  type Details = { host?: string; ok?: boolean; tally?: { failed?: number }; failures: { type: string; reason: string }[]; diag: Record<string, unknown> } & Record<string, unknown>;
+  const { events } = JSON.parse(text) as { events: { event: string; source: string; details: Details }[] };
+  const scan = events.find((e) => e.event === "extension.discovery.scan" && e.details.ok);
+  expect(scan).toMatchObject({ source: "extension" });
+  // What a fix for a different Canvas layout would need: structure counts, types, lock state — no titles, no text.
+  expect(scan!.details).toMatchObject({ host: "localhost:3300", modules: 3, items: 13, importable: 6, locked: 2, byType: { page: 3, file: 5, quiz: 1 } });
+  expect(scan!.details.diag).toMatchObject({ modulesRoot: 1, moduleEls: 4, itemEls: expect.any(Number), titleLinks: expect.any(Number) });
+  const run = events.find((e) => e.event === "extension.discovery.run" && e.details.tally?.failed === 2)!;
+  expect(run.details.failures.map((f) => f.type).sort()).toEqual(["file", "file"]);
+  expect(run.details.failures.map((f) => f.reason).join(" ")).toMatch(/\.mp4 type Klierly cannot read.*no download link/s);
+  const cap = events.find((e) => e.event === "extension.captions.read")!;
+  expect(cap.details).toMatchObject({ sources: 2, tracks: 2, panels: 0 });
+  expect(events.some((e) => e.event === "source.created" && e.source === "extension")).toBe(true);
+  // Import events carry source titles (course structure); what the extension itself reports carries neither titles nor text.
+  const fromExtension = JSON.stringify(events.filter((e) => e.event.startsWith("extension.")));
+  for (const never of ["Module 1 overview", "Module 2 notes", "Lecture 2 recording", "Quiz 1: Simple regression", "Mock lecture", "MOCK-QUIZ-CONTENT", "MOCK-HIDDEN-ANSWER-KEY", "EMBEDDED-PLAYER-CAPTION", "The slope b1 is the estimated change"]) expect(fromExtension.includes(never), never).toBe(false);
+  for (const never of ["Quiz 1: Simple regression", "MOCK-QUIZ-CONTENT", "MOCK-HIDDEN-ANSWER-KEY", "EMBEDDED-PLAYER-CAPTION", "The slope b1 is the estimated change"]) expect(text.includes(never), never).toBe(false);
+  // The endpoint refuses anything that is not a known run summary.
+  const bad = await app.request.post("/api/ext/log", { headers: { Authorization: `Bearer ${token}` }, data: { event: "pwn", details: {} } });
+  expect(bad.status()).toBe(400);
+  expect((await app.request.post("/api/ext/log", { data: { event: "discovery.scan", details: {} } })).status()).toBe(401);
+});
+
 test("server: inventory endpoint needs the pairing token and is scoped to the owner", async ({ request, browser }) => {
   const auth = { Authorization: `Bearer ${token}` };
   const mine = await request.get(`/api/ext/courses/${courseId}/sources`, { headers: auth });

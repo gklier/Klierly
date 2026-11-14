@@ -6,7 +6,7 @@ import { and, eq } from "drizzle-orm";
 import { db, schema } from "@/db";
 import type { AnswerResponse } from "@/db/schema";
 import type { ActionState } from "@/components/forms";
-import { generateLearnNote, generateQuestions, proposeTopics } from "@/lib/ai/generate";
+import { generateLearnNote, generateQuestions, generateSupplement, proposeTopics } from "@/lib/ai/generate";
 import { AiError } from "@/lib/ai/provider";
 import { requireUser } from "@/lib/auth";
 import { ownsCourse } from "@/lib/courses";
@@ -163,6 +163,20 @@ export async function organizeTopicsAction(_: ActionState, fd: FormData): Promis
     revalidatePath(`/courses/${courseId}`, "layout");
     if (!r.ok) return { error: r.reason };
     return { ok: `${r.proposed} ${r.proposed === 1 ? "topic" : "topics"} suggested${r.dropped ? ` (${r.dropped} discarded: duplicates, labels, or not found in your material)` : ""}. Review them under “Suggestions from your materials” above.` };
+  } catch (e) {
+    return { error: aiMessage(e) };
+  }
+}
+
+/** AI explanation of what a topic's notes leave out. Stored separately and always shown as AI-added, not from the course. */
+export async function generateSupplementAction(_: ActionState, fd: FormData): Promise<ActionState> {
+  const user = await requireUser();
+  const courseId = String(fd.get("courseId") ?? ""), topicId = String(fd.get("topicId") ?? "");
+  if (!(await ownsCourse(user.id, courseId)) || !uuid(topicId)) return { error: "That topic was not found." };
+  try {
+    const r = await generateSupplement({ userId: user.id, courseId, topicId });
+    revalidatePath(`/courses/${courseId}/practice/learn/${topicId}`);
+    return r.ok ? { ok: "Added an AI explanation of what the notes leave out." } : { error: r.reason };
   } catch (e) {
     return { error: aiMessage(e) };
   }

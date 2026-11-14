@@ -130,7 +130,8 @@ export const importJobs = pgTable("import_jobs", {
 
 export type ProposalPayload =
   | { kind: "module"; name: string; number?: number }
-  | { kind: "topic"; name: string; documentId?: string; via?: "ai" }
+  | { kind: "topic"; name: string; documentId?: string; via?: "ai" | "objective"; detail?: string }
+  | { kind: "format"; label: string; examKey: string | null; questionCount?: number; minutes?: number; points?: number; types?: string[] }
   | { kind: "objective"; text: string; moduleNumber?: number }
   | { kind: "date"; label: string; date: string; dateKind: "exam" | "deadline"; modulesCovered?: number[]; yearAssumed?: boolean };
 
@@ -352,3 +353,47 @@ export const learnNotes = pgTable("learn_notes", {
   origin: text("origin").$type<"ai" | "sample">().notNull(),
   createdAt: createdAt(),
 }, (t) => [uniqueIndex("learn_notes_topic_uq").on(t.topicId)]);
+
+/** Exam structure found in the student's own materials (usually the syllabus). Never assumed; the student confirms it in the study plan. */
+export const examFormats = pgTable("exam_formats", {
+  id: id(),
+  userId: uuid("user_id").notNull().references(() => users.id, { onDelete: "cascade" }),
+  courseId: uuid("course_id").notNull().references(() => courses.id, { onDelete: "cascade" }),
+  /** "exam 1", "midterm", "final"; null when the text describes exams in general. */
+  examKey: text("exam_key"),
+  label: text("label").notNull(),
+  questionCount: integer("question_count"),
+  minutes: integer("minutes"),
+  points: integer("points"),
+  types: jsonb("types").$type<string[]>().notNull().default([]),
+  evidenceChunkId: uuid("evidence_chunk_id").references(() => sourceChunks.id, { onDelete: "set null" }),
+  createdAt: createdAt(),
+}, (t) => [index("exam_formats_course_idx").on(t.courseId)]);
+
+export type SupplementBody = { covered: string; gaps: { point: string; explanation: string }[]; verify: string[] };
+
+/** AI-written explanation of what a topic's notes leave out. General knowledge, NOT from the course: always shown labelled as such. */
+export const learnSupplements = pgTable("learn_supplements", {
+  id: id(),
+  userId: uuid("user_id").notNull().references(() => users.id, { onDelete: "cascade" }),
+  courseId: uuid("course_id").notNull().references(() => courses.id, { onDelete: "cascade" }),
+  topicId: uuid("topic_id").notNull().references(() => topics.id, { onDelete: "cascade" }),
+  body: jsonb("body").$type<SupplementBody>().notNull(),
+  model: text("model").notNull(),
+  createdAt: createdAt(),
+}, (t) => [uniqueIndex("learn_supplements_topic_uq").on(t.topicId)]);
+
+/**
+ * What the account holder did and what the system did on their behalf: events, counts and the titles of
+ * sources and topics. Never document text, prompts, answers, passwords or keys. Kept for the account (deleted with it);
+ * course_id has no foreign key on purpose so history survives deleting a course.
+ */
+export const activityLog = pgTable("activity_log", {
+  id: id(),
+  userId: uuid("user_id").notNull().references(() => users.id, { onDelete: "cascade" }),
+  courseId: uuid("course_id"),
+  at: timestamp("at", { withTimezone: true }).notNull().defaultNow(),
+  source: text("source").$type<"web" | "extension" | "server">().notNull().default("server"),
+  event: text("event").notNull(),
+  details: jsonb("details").$type<Record<string, unknown>>().notNull().default({}),
+}, (t) => [index("activity_user_at_idx").on(t.userId, t.at)]);

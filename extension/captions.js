@@ -1,5 +1,5 @@
 // Caption import for the page in the student's tab. Nothing is sent before "Import captions".
-import { ApiError, fetchCourses, importFile, loadSettings, normalizeServerUrl, safeHttpUrl } from './src/api.js';
+import { ApiError, fetchCourses, importFile, loadSettings, logEvent, normalizeServerUrl, safeHttpUrl } from './src/api.js';
 import { cleanTitle } from './src/clean.js';
 import { captionFiles, listEmbeds, readCaptions } from './src/captions.js';
 import { evaluateGuard } from './src/guard.js';
@@ -34,6 +34,7 @@ async function read() {
   files = captionFiles(results, cleanTitle(page.title) || 'Lecture').map((f) => ({ ...f, selected: true }));
   $('read').disabled = false;
   const players = results.reduce((n, r) => n + r.media, 0);
+  logEvent(settings, 'captions.read', { frames: results.length, players, sources: files.length, tracks: files.filter((f) => f.cues).length, panels: files.filter((f) => !f.cues).length, embeddedOrigins: embeds.origins.length }, $('target').value);
   if (!files.length) {
     $('read-status').textContent = '';
     return fatal(players

@@ -2,7 +2,7 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 import { and, eq } from "drizzle-orm";
 import { db, schema } from "@/db";
-import { generateNoteAction, startPractice } from "@/app/actions/practice";
+import { generateNoteAction, generateSupplementAction, startPractice } from "@/app/actions/practice";
 import { CitationList } from "@/components/citations";
 import { ActionForm, Submit } from "@/components/forms";
 import { Icon } from "@/components/icons";
@@ -21,11 +21,12 @@ export default async function LearnPage({ params }: { params: Promise<{ courseId
   if (!/^[0-9a-f-]{36}$/.test(topicId)) notFound();
   const [topic] = await db.select().from(schema.topics).where(and(eq(schema.topics.id, topicId), eq(schema.topics.courseId, course.id), eq(schema.topics.userId, user.id))).limit(1);
   if (!topic) notFound();
-  const [[note], chunks, ai, questions] = await Promise.all([
+  const [[note], chunks, ai, questions, [supplement]] = await Promise.all([
     db.select().from(schema.learnNotes).where(eq(schema.learnNotes.topicId, topic.id)).limit(1),
     chunksForTopic({ userId: user.id, courseId: course.id, topicName: topic.name, moduleId: topic.moduleId, limit: 4 }),
     aiStatus(user.id),
     db.select({ id: schema.questions.id }).from(schema.questions).where(and(eq(schema.questions.topicId, topic.id), eq(schema.questions.status, "active"))),
+    db.select().from(schema.learnSupplements).where(eq(schema.learnSupplements.topicId, topic.id)).limit(1),
   ]);
   const cites = note ? await expandCitations(note.body.keyPoints.map((k) => k.citations)) : [];
   const base = `/courses/${course.id}`;
@@ -78,6 +79,30 @@ export default async function LearnPage({ params }: { params: Promise<{ courseId
             </section>
           )}
         </>
+      )}
+
+      {chunks.length > 0 && (
+        <section className="mt-8" aria-labelledby="gap-h">
+          <h2 id="gap-h" className="text-lg font-semibold">What your notes leave out</h2>
+          {supplement ? (
+            <div className="mt-2 rounded-xl border-2 border-dashed border-warn p-4" data-testid="supplement">
+              <p className="flex flex-wrap items-center gap-2"><span className="badge badge-warn">AI-added · general knowledge · not from your course</span><span className="text-xs text-muted">written by {supplement.model}</span></p>
+              <p className="notice notice-warn mt-3 text-sm">Not checked against your course or any textbook, and it can be wrong. Treat it as help understanding, not as what will be tested, and check anything that matters with your instructor.</p>
+              <p className="mt-3 text-sm text-muted">What your notes cover: {supplement.body.covered}</p>
+              <ul className="mt-3 space-y-3">
+                {supplement.body.gaps.map((g, i) => <li key={i}><p className="font-semibold">{g.point}</p><p className="reading !text-[1.02rem]">{g.explanation}</p></li>)}
+              </ul>
+              {supplement.body.verify.length > 0 && <div className="mt-4"><p className="text-sm font-semibold">Worth checking with your instructor or textbook</p><ul className="mt-1 list-disc space-y-1 pl-5 text-sm text-muted">{supplement.body.verify.map((v, i) => <li key={i}>{v}</li>)}</ul></div>}
+            </div>
+          ) : <p className="mt-1 text-sm text-muted">Lecture notes are often a skeleton. Ask the AI where yours are thin; its answer is kept separate from your course material and labelled.</p>}
+          {ai.kind && ai.available && course.allowExternalAi && (
+            <ActionForm action={generateSupplementAction} className="mt-3">
+              <input type="hidden" name="courseId" value={course.id} /><input type="hidden" name="topicId" value={topic.id} />
+              <Submit className="btn" pendingText="Looking for gaps…"><Icon name="spark" />{supplement ? "Redo the explanation" : "Explain what the notes leave out"}</Submit>
+              <p className="help">Sends up to 6 short excerpts to {ai.kind === "managed" ? `${ai.label} (${ai.host})` : ai.host}. The answer is general knowledge, so it is never cited and never used to write practice questions.</p>
+            </ActionForm>
+          )}
+        </section>
       )}
 
       <section className="mt-8 border-t border-line pt-5">

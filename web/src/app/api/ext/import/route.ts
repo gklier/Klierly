@@ -5,6 +5,7 @@ import { corsHeaders, extError, externalIdOf, preflight } from "@/lib/ext";
 import { assessAssessment } from "@/lib/ingest/guard";
 import { createSource, IngestError, MAX_PASTE_CHARS } from "@/lib/ingest/pipeline";
 import { rateLimit } from "@/lib/ratelimit";
+import { logActivity } from "@/lib/activity";
 
 export const dynamic = "force-dynamic";
 export const OPTIONS = preflight;
@@ -28,11 +29,12 @@ export async function POST(req: Request) {
   const signals = body.signals as { assessmentSuspected?: unknown } | undefined;
   const check = assessAssessment({ url, title, text });
   if (check.blocked || signals?.assessmentSuspected === true) {
+    await logActivity(user.id, "capture.blocked", { source: "extension", details: { where: "server", reasons: check.reasons.length } });
     return extError(req, 422, "assessment_blocked", `This page looks like an active assessment or a restricted page${check.reasons.length ? ` (${check.reasons.join("; ")})` : ""}. Klierly does not import those.`);
   }
   try {
     const r = await createSource({ userId: user.id, courseId: body.courseId, moduleId: uuid(body.moduleId) ? body.moduleId : null, kind: "web", title, filename: "capture.md", mime: "text/markdown", data: Buffer.from(text, "utf8"), originUrl: url,
-      externalId: externalIdOf(body.externalId), moduleName: typeof body.moduleName === "string" ? body.moduleName : null });
+      via: "extension", externalId: externalIdOf(body.externalId), moduleName: typeof body.moduleName === "string" ? body.moduleName : null });
     return NextResponse.json({ documentId: r.documentId, jobId: r.jobId, duplicate: r.duplicate, outcome: r.outcome, viewUrl: `${env.appUrl}/courses/${body.courseId}/materials/${r.documentId}` }, { status: r.duplicate ? 200 : 201, headers: corsHeaders(req) });
   } catch (e) {
     if (e instanceof IngestError) return extError(req, e.status, e.code, e.message);

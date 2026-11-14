@@ -1,5 +1,5 @@
 // Popup controller. Nothing leaves the browser until the Import button is clicked.
-import { ApiError, fetchCourses, importCapture, loadSettings, normalizeServerUrl, safeHttpUrl } from './src/api.js';
+import { ApiError, fetchCourses, importCapture, loadSettings, logEvent, normalizeServerUrl, safeHttpUrl } from './src/api.js';
 import { cleanText, cleanTitle, formatCount, limitText } from './src/clean.js';
 import { collectSignals, extractVisibleText } from './src/extract.js';
 import { evaluateGuard, restrictedPageReason } from './src/guard.js';
@@ -88,6 +88,7 @@ async function init() {
   if (!signals) return block('This page cannot be captured', ['The page did not return any information.']);
   const verdict = evaluateGuard({ url: signals.url, title: signals.title, text: '', domSignals: signals.domSignals });
   if (verdict.blocked) {
+    logEvent(settings, 'capture.blocked', { kind: verdict.kind, reasons: verdict.reasons.length, host: new URL(tab.url).host });
     return verdict.kind === 'private'
       ? block('This page is not study material', verdict.reasons, 'Grades and class lists are personal records. Klierly does not import them.')
       : block('This page looks like an assessment in progress', verdict.reasons, `Klierly does not capture or help with graded assessments. Finish it on your own; afterwards, study from permitted notes and readings. ${FALLBACK}`);

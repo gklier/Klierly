@@ -112,6 +112,14 @@ log redaction, security headers.
 - **CI** (`.github/workflows/ci.yml`): worker tests, extension tests and packaging, web type check,
   lint, audit, integration and E2E with Postgres, plus a check that no secrets or uploads are tracked.
 
+- **Objectives as topics, exam formats, supplements, activity log** (round two): `proposals.ts` turns
+  stated objectives into topic proposals (`topicFromObjective`), merges near-duplicates (`sameTopic`) and
+  parses exam structure from syllabus lines (`parseExamFormat`, matched by `examKeyOf`) into `exam_formats`,
+  which the plan form offers alongside exam dates. `learn_supplements` holds labelled AI gap-filling apart
+  from `learn_notes`. `activity_log` (`lib/activity.ts`) records events, counts and titles through the same
+  redaction as server logs; the extension reports run summaries via `POST /api/ext/log` (fixed event names,
+  size-limited, redacted). Viewed and exported at `/activity` and `/api/activity/export`.
+
 ## Deployment options
 
 - **Local** (default): processes or `docker compose up`; web bound to 127.0.0.1.

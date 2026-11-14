@@ -40,16 +40,45 @@ Choosing and funding a provider is a founder decision; it starts real spending.
 - Quotas are checked before each call, not reserved, so parallel requests can overshoot slightly.
 - No email verification yet, so a quota is per account, not per person. Keep invite-only.
 
+## Where "AI with no key" comes from
+
+Nowhere yet: managed AI is only a slot. Someone has to supply an OpenAI-compatible endpoint and key
+for it, and that someone pays or hosts. The options, with their real constraints:
+
+| Option | Cost | Notes |
+| --- | --- | --- |
+| **A paid API** (any OpenAI-compatible provider) | Per use; the monthly budget stop and quotas cap it | Best quality; cost scales with students. Founder decision |
+| **Self-hosted on a small server** (Ollama exposes `http://<host>:11434/v1`, which works here unchanged) | Server cost only | See the limits below |
+| **NaviGator** | UF credits | Not suitable for serving other students; see below |
+
+**Oracle Always Free limits** (read 2026-11-14 at Oracle's Always Free Resources page): the Arm A1
+allowance is **2 OCPUs and 12 GB of memory in total**, 200 GB of storage, and "idle Always Free
+compute instances may be reclaimed" (7-day 95th-percentile CPU, network and, for A1, memory all
+under 20%). *An earlier note in this project assumed 4 OCPUs and 24 GB; that was wrong for the
+current page.* Consequences: Klierly's web app, worker and database already use part of 12 GB, so a
+very large model (the roughly 120-billion-parameter open models) cannot run there and probably not on an ordinary
+laptop either; a small quantised model (a few billion parameters) can, but slowly on 2 Arm cores,
+and its output will fail Klierly's JSON, citation and arithmetic checks more often. Treat a
+self-hosted small model as a free fallback, not as the main experience. If a bigger model is wanted,
+run it somewhere with a GPU and point `MANAGED_AI_BASE_URL` at it.
+
 ## UF NaviGator Toolkit
 
-Read on 2026-11-14 at <https://docs.ai.it.ufl.edu/docs/navigator_toolkit/intro/>. As summarised
-from that page: the service "is available to UF students, faculty, and staff"; "Every UF student,
-faculty, and staff receives a $100 per month credit to generate personal API keys"; access to
-cloud-hosted models "requires team‑based approval and billing arrangements"; and restricted or
-sensitive data is "not permitted with cloud models". The page does not say whether a personal key
-may be used with a third-party or commercial application, and does not give an API endpoint.
+Read on 2026-11-14 at the NaviGator intro and quickstart pages. UF's quickstart shows
+`POST https://api.ai.it.ufl.edu/v1/chat/completions` with `Authorization: Bearer <key>` and a
+`model` plus `messages` body, and says OpenAI-compatible SDKs work — so Klierly's generic provider
+connection fits. Keys are created by a signed-in UF user at <https://api.ai.it.ufl.edu/ui>, are
+personal, are limited to the models chosen at creation (UF-hosted local models for personal keys,
+for example `llama-3.1-8b-instruct` in the quickstart), and are shown once. UF's intro states that
+every UF student, faculty and staff member receives a $100 monthly credit for personal keys, that
+cloud-hosted models need team approval and billing, and that restricted or sensitive data is not
+permitted with cloud models.
 
-Conclusion: NaviGator is **not** used as Klierly's managed provider and is not presented as
-approved. It remains available only as a student's own, clearly experimental BYOK option, for the
-student to use if UF's terms permit it. Using personal student credits to power a public or
-commercial Klierly would need written confirmation from UF IT.
+What the pages do **not** say: whether a personal key may be used with a third-party or commercial
+application, or whether personal credits may serve other people. So:
+
+- **For your own study**: enter your own key under Settings → AI connection → UF NaviGator (the preset
+  fills the address and an example model). It is stored encrypted and never leaves the server.
+- **Not as the managed provider** for other students, and not in a public or commercial deployment,
+  unless UF confirms in writing that this is allowed.
+- Never paste a key into chat, issues, commits or documents. UF's own guidance is to treat it like a password.

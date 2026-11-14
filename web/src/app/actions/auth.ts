@@ -9,6 +9,7 @@ import { createSession, destroySession } from "@/lib/auth";
 import { hashPassword, verifyPassword } from "@/lib/crypto";
 import { env } from "@/lib/env";
 import { rateLimit } from "@/lib/ratelimit";
+import { logActivity } from "@/lib/activity";
 import type { ActionState } from "@/components/forms";
 
 const clientIp = async () => (await headers()).get("x-forwarded-for")?.split(",")[0]?.trim() || "local";
@@ -40,6 +41,7 @@ export async function register(_: ActionState, fd: FormData): Promise<ActionStat
   if (existing) return { error: "An account with that email already exists. Sign in instead." };
   const [user] = await db.insert(schema.users).values({ name, email, passwordHash: await hashPassword(password) }).returning({ id: schema.users.id });
   await createSession(user.id);
+  await logActivity(user.id, "auth.register", { source: "web" });
   redirect("/");
 }
 
@@ -53,6 +55,7 @@ export async function login(_: ActionState, fd: FormData): Promise<ActionState> 
   const ok = await verifyPassword(password, user?.passwordHash ?? "scrypt$AAAAAAAAAAAAAAAAAAAAAA==$AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA==");
   if (!user || !ok) return { error: "Email or password is incorrect." };
   await createSession(user.id);
+  await logActivity(user.id, "auth.login", { source: "web" });
   redirect("/");
 }
 

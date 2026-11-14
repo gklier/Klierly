@@ -5,9 +5,10 @@ import { sha256 } from "@/lib/crypto";
 import { log } from "@/lib/log";
 import { parseFile, parseText, WorkerError } from "@/lib/worker";
 import { chunkSegments } from "./chunk";
-import { moduleNumberOf, proposeFromChunks, termYear } from "./proposals";
+import { moduleNumberOf, proposeFromChunks, sameTopic, termYear } from "./proposals";
 import { readFile, removeFile, saveFile, storagePathFor } from "./storage";
 import { kickJobs } from "./jobs";
+import { logActivity } from "@/lib/activity";
 
 export const SUPPORTED_EXTENSIONS = [".pdf", ".docx", ".pptx", ".txt", ".md", ".markdown", ".html", ".htm", ".csv", ".xlsx", ".srt", ".vtt"];
 export const MAX_PASTE_CHARS = 400_000;
@@ -23,6 +24,8 @@ type NewSource = {
   externalId?: string | null; externalUpdatedAt?: string | null;
   /** Module to file the source under, by name; created if the course does not have it yet. */
   moduleName?: string | null;
+  /** Where the import came from, for the activity log. */
+  via?: "web" | "extension";
 };
 export type SourceOutcome = "created" | "unchanged" | "updated";
 
@@ -69,6 +72,7 @@ export async function createSource(input: NewSource): Promise<{ documentId: stri
   if (existing) {
     // Same content as before: nothing to re-import. Remember where it came from so a later sync recognises it.
     if (externalId) await db.update(schema.sourceDocuments).set({ externalId, externalUpdatedAt: input.externalUpdatedAt ?? null }).where(eq(schema.sourceDocuments.id, existing.id));
+    await logActivity(input.userId, "source.unchanged", { courseId: input.courseId, source: input.via ?? "web", details: { title: input.title, ext, externalId } });
     return { documentId: existing.id, jobId: null, duplicate: true, outcome: "unchanged" };
   }
   // Same resource, different content: the new version replaces the old one once it is stored.
@@ -96,6 +100,7 @@ export async function createSource(input: NewSource): Promise<{ documentId: stri
       return job.id;
     });
     if (previous) await deleteDocument(input.userId, previous.id);
+    await logActivity(input.userId, previous ? "source.updated" : "source.created", { courseId: input.courseId, source: input.via ?? "web", details: { title: input.title, kind: input.kind, ext, kb: Math.round(input.data.length / 1024), externalId, module: input.moduleName ?? undefined } });
     kickJobs();
     return { documentId, jobId, duplicate: false, outcome: previous ? "updated" : "created" };
   } catch (e) {
@@ -134,7 +139,13 @@ export async function processDocument(documentId: string): Promise<{ chunks: num
       chunkCount: rows.length, charCount: chunks.reduce((n, c) => n + c.text.length, 0), error: null,
     }).where(eq(schema.sourceDocuments.id, documentId));
 
-    const drafts = proposeFromChunks({ id: documentId, title }, chunks, { termYear: termYear(course?.term) });
+    const known = [
+      ...(await tx.select({ name: schema.topics.name }).from(schema.topics).where(eq(schema.topics.courseId, doc.courseId))).map((t) => t.name),
+      ...(await tx.select({ payload: schema.proposals.payload }).from(schema.proposals).where(and(eq(schema.proposals.courseId, doc.courseId), eq(schema.proposals.kind, "topic")))).flatMap((p) => (p.payload.kind === "topic" ? [p.payload.name] : [])),
+    ];
+    // A topic that says the same thing as one already known (existing or suggested) is not suggested again.
+    const drafts = proposeFromChunks({ id: documentId, title }, chunks, { termYear: termYear(course?.term) })
+      .filter((d) => d.payload.kind !== "topic" || !known.some((k) => sameTopic(k, (d.payload as { name: string }).name)));
     // A document that names exactly one module ("Module 2: …") most likely belongs to it; a syllabus names several.
     const named = new Set(drafts.flatMap((d) => (d.payload.kind === "module" && d.payload.number !== undefined ? [d.payload.number] : [])));
     await tx.update(schema.sourceDocuments).set({ moduleHint: named.size === 1 ? [...named][0] : null }).where(eq(schema.sourceDocuments.id, documentId));
@@ -147,6 +158,7 @@ export async function processDocument(documentId: string): Promise<{ chunks: num
   });
   await autoMapDocuments(doc.courseId);
   log("info", "import.processed", { documentId, parser: result.parser, chunks: chunks.length, confidence: result.confidence });
+  await logActivity(doc.userId, "source.processed", { courseId: doc.courseId, details: { title, parser: result.parser, chunks: chunks.length, confidence: result.confidence, warnings: result.warnings.length } });
   return { chunks: chunks.length, parser: result.parser };
 }
 

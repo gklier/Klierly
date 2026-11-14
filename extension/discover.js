@@ -1,6 +1,6 @@
 // Course discovery and import. Runs in its own extension tab so it survives
 // navigation in the course tab. Nothing is imported before "Import selected".
-import { ApiError, fetchCourses, fetchSources, importCapture, importFile, loadSettings, normalizeServerUrl, safeHttpUrl } from './src/api.js';
+import { ApiError, fetchCourses, fetchSources, importCapture, importFile, loadSettings, logEvent, normalizeServerUrl, safeHttpUrl } from './src/api.js';
 import { cleanText, cleanTitle, limitText } from './src/clean.js';
 import { collectSignals, extractVisibleText } from './src/extract.js';
 import { evaluateGuard } from './src/guard.js';
@@ -65,11 +65,16 @@ async function scan() {
     }
     if (!result?.modules?.length) {
       $('scan-status').textContent = '';
+      logEvent(settings, 'discovery.scan', { host: course.host, ok: false, modules: 0, diag: result?.diag }, $('target').value);
       return fatal('No modules were found on this course\'s Modules page. The course may not use Modules, may hide them from students, or this site may lay the page out differently. You can still capture single pages with the toolbar button, or upload files in Klierly.');
     }
     inventory = result;
     try { imported = new Map((await fetchSources(settings, $('target').value)).map((s) => [s.externalId, s])); } catch { imported = new Map(); }
     renderInventory();
+    const items = allItems();
+    const byType = {};
+    for (const i of items) byType[i.type] = (byType[i.type] || 0) + 1;
+    logEvent(settings, 'discovery.scan', { host: course.host, ok: true, modules: inventory.modules.length, items: items.length, importable: items.filter((i) => i.importable).length, locked: items.filter((i) => i.locked).length, byType, more: inventory.more, diag: inventory.diag }, $('target').value);
     $('scan-status').textContent = `Scanned ${new Date().toLocaleTimeString()}.`;
   } catch (e) {
     $('scan-status').textContent = '';
@@ -226,6 +231,9 @@ async function runImport() {
   }
   const left = run.items.some((i) => i.status === 'pending');
   run.state = left ? 'stopped' : 'finished';
+  const tally = {};
+  for (const i of run.items) { const k = i.status === 'done' ? (i.outcome || 'created') : i.status; tally[k] = (tally[k] || 0) + 1; }
+  logEvent(settings, 'discovery.run', { host: course.host, items: run.items.length, tally, stopped: left, failures: run.items.filter((i) => i.status === 'failed').slice(0, 20).map((i) => ({ type: i.type, reason: String(i.message || '').slice(0, 140) })) }, run.klierlyCourseId);
   if (left) await saveRun(); else await chrome.storage.local.remove(runKey());
   try { await open(course.modulesUrl); } catch { /* the tab may have been closed */ }
   renderRun();

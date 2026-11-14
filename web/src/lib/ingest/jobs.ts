@@ -2,6 +2,7 @@ import { eq, sql } from "drizzle-orm";
 import { db, schema } from "@/db";
 import { log } from "@/lib/log";
 import { WorkerError } from "@/lib/worker";
+import { logActivity } from "@/lib/activity";
 
 type State = { running: boolean; timer: NodeJS.Timeout | null; pending: boolean };
 const g = globalThis as unknown as { __clJobs?: State };
@@ -50,6 +51,8 @@ export async function runOneJob(): Promise<boolean> {
       await db.update(schema.sourceDocuments).set({ status: "queued", error: `${message} Retrying automatically.` }).where(eq(schema.sourceDocuments.id, job.document_id));
     }
     log("warn", "import.failed", { jobId: job.id, permanent, attempts: job.attempts, code: e instanceof WorkerError ? e.code : "unexpected" });
+    const [d] = await db.select({ userId: schema.sourceDocuments.userId, courseId: schema.sourceDocuments.courseId, title: schema.sourceDocuments.title }).from(schema.sourceDocuments).where(eq(schema.sourceDocuments.id, job.document_id)).limit(1);
+    if (d) await logActivity(d.userId, "source.failed", { courseId: d.courseId, details: { title: d.title, code: e instanceof WorkerError ? e.code : "unexpected", message, attempt: job.attempts, willRetry: !exhausted } });
   }
   return true;
 }

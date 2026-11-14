@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { chunkSegments, splitText } from "@/lib/ingest/chunk";
-import { isTopicHeading, parseDateInLine, parseModulesCovered, proposeFromChunks, moduleNumberOf } from "@/lib/ingest/proposals";
+import { examKeyOf, isTopicHeading, parseDateInLine, parseExamFormat, parseModulesCovered, proposeFromChunks, moduleNumberOf, sameTopic, topicFromObjective } from "@/lib/ingest/proposals";
 import { assessAssessment } from "@/lib/ingest/guard";
 import { evaluate, formatNumber } from "@/lib/calc";
 import { grade, mulberry32, nextMastery, parseNumericInput, pickByQuota, pickQuestions, readiness, type PoolQuestion, type TopicState } from "@/lib/practice/core";
@@ -57,7 +57,10 @@ describe("suggestions from materials", () => {
       { kind: "objective", text: "Interpret a partial slope while holding others fixed.", moduleNumber: 2 },
       { kind: "objective", text: "Compare models using adjusted R-squared.", moduleNumber: 2 }]);
     expect(kinds("date")).toEqual([{ kind: "date", label: "December 4, 2026 — Exam 1 — covers Modules 1–2", date: "2026-12-04", dateKind: "exam", modulesCovered: [1, 2] }]);
-    expect(kinds("topic")).toHaveLength(0); // syllabus headings are not topics
+    // Syllabus headings are not topics, but the course's own learning objectives are: one topic each, full text kept.
+    expect(kinds("topic")).toEqual([
+      { kind: "topic", name: "Partial slope while holding others fixed", documentId: "d", via: "objective", detail: "Interpret a partial slope while holding others fixed." },
+      { kind: "topic", name: "Models using adjusted R-squared", documentId: "d", via: "objective", detail: "Compare models using adjusted R-squared." }]);
   });
   it("turns note headings into topics, skipping generic ones", () => {
     const drafts = proposeFromChunks({ id: "d", title: "Module 1 notes" }, [
@@ -80,6 +83,59 @@ describe("topic headings (from a real course report)", () => {
       expect(isTopicHeading(good), good).toBe(true);
     }
     expect(isTopicHeading("Module 21 notes", "Module 21 Notes")).toBe(false); // the document's own title is not a topic
+  });
+});
+
+describe("learning objectives become topics (the Module 21 page from a real course)", () => {
+  it("shortens objectives to the subject", () => {
+    expect(topicFromObjective("Conduct a Wilcoxon Rank Sum and Mann-Whitney test, including stating a hypothesis, stating and checking assumptions, identifying test statistics and p-values, and making conclusions.")).toBe("Wilcoxon Rank Sum and Mann-Whitney test");
+    expect(topicFromObjective("Conduct a Kruskal Wallace test, including stating a hypothesis.")).toBe("Kruskal Wallace test");
+    expect(topicFromObjective("Distinguish rank data from other forms of data.")).toBe("Rank data from other forms of data");
+    expect(topicFromObjective("Determine when to use the Wilcoxon Rank Sum, Mann Whitney Test, and Kruskal Wallace Test appropriately.")).toBe("When to use Wilcoxon Rank Sum, Mann Whitney Test, and Kruskal Wallace Test");
+    expect(topicFromObjective("Explain and interpret the coefficient of an indicator variable")).toBe("Coefficient of an indicator variable");
+  });
+  it("finds unbulleted objectives under a 'Learning Objectives' line and stops at the next section", () => {
+    const text = "Overview\n\nLearning Objectives\n\nConduct a Wilcoxon Rank Sum and Mann-Whitney test, including stating a hypothesis and checking assumptions.\n\nConduct a Kruskal Wallace test, including stating a hypothesis.\n\nDistinguish rank data from other forms of data.\n\nResources\n\nHere is the shell of the notes for Module 21:";
+    const out = proposeFromChunks({ id: "d", title: "Module 21" }, [{ ordinal: 0, kind: "text", heading: "Module 21: Wilcoxon Sum, Kruskall Wallis", text }], { termYear: null });
+    const objectives = out.filter((d) => d.payload.kind === "objective");
+    expect(objectives).toHaveLength(3);
+    expect(objectives.map((d) => (d.payload.kind === "objective" ? d.payload.moduleNumber : null))).toEqual([21, 21, 21]);
+    expect(out.filter((d) => d.payload.kind === "topic").map((d) => (d.payload.kind === "topic" ? d.payload.name : ""))).toEqual(["Wilcoxon Rank Sum and Mann-Whitney test", "Kruskal Wallace test", "Rank data from other forms of data"]);
+    expect(JSON.stringify(out)).not.toContain("Resources");
+  });
+  it("treats reworded versions of one subject as the same topic", () => {
+    expect(sameTopic("Wilcoxon Rank Sum and Mann-Whitney test", "Wilcoxon Rank – Sum Test / Mann Whitney Statistic")).toBe(true);
+    expect(sameTopic("Kruskal Wallace test", "Kruskal Wallace Test")).toBe(true);
+    expect(sameTopic("Two Way ANOVA with Interaction", "Kruskal Wallace test")).toBe(false);
+    expect(sameTopic("Residual plots", "Residual assumptions")).toBe(false);
+    expect(sameTopic("Indicator variables", "Interaction terms")).toBe(false);
+  });
+});
+
+describe("exam format from a syllabus", () => {
+  it("reads question counts, types, time and points", () => {
+    expect(parseExamFormat("Exam 1 has 25 multiple-choice questions and 2 free-response problems, 75 minutes, 100 points.")).toEqual({ questionCount: 27, types: ["multiple choice", "free response", "problems"], minutes: 75, points: 100 });
+    expect(parseExamFormat("The Final Exam has 40 multiple-choice questions and 3 problems, 2 hours.")).toMatchObject({ questionCount: 43, minutes: 120 });
+    expect(parseExamFormat("Midterm: 50 questions in 90 minutes")).toMatchObject({ questionCount: 50, minutes: 90 });
+    expect(parseExamFormat("Exam 2 is 60 minutes long")).toEqual({ minutes: 60 });
+  });
+  it("ignores lines that are not about an exam or carry no structure", () => {
+    expect(parseExamFormat("Study 30 minutes per day for 5 questions of homework")).toBeNull(); // not an exam line
+    expect(parseExamFormat("Exam 1: December 4, 2026 — covers Modules 1–3.")).toBeNull();
+    expect(parseExamFormat("Exams are closed book.")).toBeNull();
+    expect(parseExamFormat("Final exam worth 500 questions in 2 minutes")).toBeNull(); // implausible numbers are not trusted
+  });
+  it("matches a format to its exam", () => {
+    expect(examKeyOf("Exam 1 has 25 questions")).toBe("exam 1");
+    expect(examKeyOf("The Midterm is 50 minutes")).toBe("midterm");
+    expect(examKeyOf("Final Exam: 40 questions")).toBe("final");
+    expect(examKeyOf("Exams are closed book")).toBeNull();
+  });
+  it("is proposed from the syllabus with the exam it belongs to", () => {
+    const out = proposeFromChunks({ id: "d", title: "Syllabus" }, [{ ordinal: 0, kind: "text", heading: "Exam format", text: "Exam 1 has 25 multiple-choice questions, 75 minutes.\n\nThe Final Exam has 40 multiple-choice questions, 2 hours." }], { termYear: null });
+    expect(out.filter((d) => d.payload.kind === "format").map((d) => d.payload)).toEqual([
+      { kind: "format", label: "Exam 1 has 25 multiple-choice questions, 75 minutes", examKey: "exam 1", questionCount: 25, types: ["multiple choice"], minutes: 75 },
+      { kind: "format", label: "The Final Exam has 40 multiple-choice questions, 2 hours", examKey: "final", questionCount: 40, types: ["multiple choice"], minutes: 120 }]);
   });
 });
 

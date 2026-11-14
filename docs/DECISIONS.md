@@ -41,3 +41,40 @@
 - **Captures keep structure** as light Markdown so headings and objectives survive import.
 - **Blueprint weights by material volume**, labelled as a study aid, never as the instructor's design.
 - **NaviGator** stays BYOK-only and experimental: its page does not address third-party use.
+
+## Phase 2, second round (founder answers)
+
+- **Topics must come from the class.** Agreed and made structural: learning objectives first (one topic
+  each, full objective kept as detail), then filtered headings, near-duplicates merged. The AI topic
+  tool never adds subjects of its own: each suggestion must cite an excerpt it was given and be found
+  in the material, and everything waits for review. Treat it as an optional tidy-up, not the source.
+- **AI fills information gaps, labelled.** Built as a separate "What your notes leave out" section:
+  stored apart from source-grounded notes, dashed warning style, "not from your course", never
+  cited, never used to write questions, prompted to avoid numeric claims because those cannot be
+  verified. Source-grounded and supplemental content stay distinguishable everywhere.
+- **Exam structure comes from the syllabus.** Lines such as "Exam 1 has 25 multiple-choice questions
+  and 2 problems, 75 minutes, 100 points" become exam-format suggestions, matched to the right exam
+  by name, offered with the exam date in the plan form, and confirmed by the student. Unknown stays unknown.
+- **Activity log.** Built for the account holder: events, counts and titles of sources and topics;
+  never document text, prompts, answers, passwords or keys; visible, downloadable, clearable, deleted
+  with the account. The extension reports scan and import summaries (including structure counts) so
+  failures on a real Canvas site can be diagnosed from the file. Limit worth knowing: a new session
+  cannot read the live server. The log is useful to whoever the founder hands the diagnostics file to.
+- **Not building student-to-student sharing of course material yet.** The founder's earlier brief
+  forbade a shared repository of course materials; the new request reverses that. The obstacle is
+  not technical. Instructors hold copyright in lectures, slides and recorded lectures (including
+  transcripts); a student ticking a box cannot grant rights in someone else's work, the university
+  may restrict redistribution, and a hosted library of copied course content would make Klierly the
+  distributor. It also needs terms, takedown handling and legal review. **A version that avoids this:**
+  classmates in the same course share only what they created themselves (their own notes, flagged
+  question corrections, their own topic mappings) and the course's *structure* (module names,
+  objectives, exam dates), never instructor files, slides, readings or transcripts; sharing is off by
+  default, per item, with terms and a report/remove path. Waiting on the founder's choice and on
+  advice from someone qualified.
+- **Past exams.** Open question rather than a refusal: uploading old exams for *structure only*
+  (number and type of questions, topic spread) is reasonable if the student may keep them. It would
+  need to stay private, never feed question generation, and be clearly separate from sources.
+- **NaviGator**: UF's quickstart gives the endpoint, so a preset was added. It stays a personal,
+  experimental BYOK option; UF's pages do not authorise serving other students from personal keys.
+- **Oracle sizing corrected.** The current Always Free page says 2 OCPUs and 12 GB total (an earlier
+  note assumed 4 and 24). A 120B-parameter model is out of reach there.

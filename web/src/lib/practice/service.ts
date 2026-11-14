@@ -3,6 +3,7 @@ import { db, schema } from "@/db";
 import type { AnswerResponse, ErrorReason } from "@/db/schema";
 import { ERROR_REASONS } from "@/db/schema";
 import { expandCitations, type CitationView } from "@/lib/citations";
+import { logActivity } from "@/lib/activity";
 import { grade, mulberry32, nextMastery, pickByQuota, pickQuestions, type PoolQuestion, type TopicState } from "./core";
 
 export type Mode = "drill" | "exam" | "review";
@@ -65,6 +66,7 @@ export async function startSession(opts: { userId: string; courseId: string; mod
     timeLimitSec: opts.mode === "exam" ? Math.round((opts.minutes ?? Math.max(5, Math.round(ids.length * 1.5))) * 60) : null,
     planSessionId: opts.planSessionId ?? null,
   }).returning({ id: schema.practiceSessions.id });
+  await logActivity(opts.userId, "practice.started", { courseId: opts.courseId, details: { mode: opts.mode, questions: ids.length, topics: opts.topicIds?.length, blueprint: opts.quota ? true : undefined, planned: opts.planSessionId ? true : undefined } });
   return { ok: true, sessionId: row.id };
 }
 
@@ -184,6 +186,7 @@ export async function finishSession(userId: string, sessionId: string): Promise<
   }
   const [c] = await db.select({ n: sql<number>`count(*)::int` }).from(schema.answers).where(and(eq(schema.answers.sessionId, s.id), eq(schema.answers.isCorrect, true)));
   await db.update(schema.practiceSessions).set({ correctCount: c?.n ?? 0 }).where(eq(schema.practiceSessions.id, s.id));
+  await logActivity(userId, "practice.finished", { courseId: s.courseId, details: { mode: s.mode, correct: c?.n ?? 0, total: s.questionIds.length, minutes: Math.round((Date.now() - s.startedAt.getTime()) / 60000) } });
   if (s.planSessionId) {
     await db.update(schema.planSessions).set({ status: "done", completedAt: new Date() })
       .where(and(eq(schema.planSessions.id, s.planSessionId), eq(schema.planSessions.userId, userId)));

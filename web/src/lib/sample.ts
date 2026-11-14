@@ -55,7 +55,7 @@ export async function loadSampleCourse(userId: string): Promise<string> {
       kickJobs();
       await new Promise((r) => setTimeout(r, 300));
     }
-    await resolveProposals(userId, course.id, "all", "accept", ["module", "objective", "date"]);
+    await resolveProposals(userId, course.id, "all", "accept", ["module", "objective", "date", "format"]);
     await resolveProposals(userId, course.id, "all", "dismiss", ["topic"]);
 
     const modules = await db.select().from(schema.modules).where(eq(schema.modules.courseId, course.id));

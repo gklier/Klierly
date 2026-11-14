@@ -4,6 +4,7 @@ import { decryptSecret, sha256 } from "@/lib/crypto";
 import { env } from "@/lib/env";
 import { log } from "@/lib/log";
 import { rateLimit } from "@/lib/ratelimit";
+import { logActivity } from "@/lib/activity";
 
 export class AiError extends Error {
   constructor(public code: "no_provider" | "limit_reached" | "rate_limited" | "blocked_endpoint" | "auth_failed" | "provider_error" | "bad_output" | "course_disallows_ai", message: string) {
@@ -171,13 +172,16 @@ export async function chatJson(userId: string, purpose: string, system: string, 
     const parsed = extractJson(out.content);
     const promptTokens = out.promptTokens ?? estimateTokens(system + user), completionTokens = out.completionTokens ?? estimateTokens(out.content);
     const price = m && status.kind === "managed" ? m.price[tier] : null;
-    await db.insert(schema.aiUsage).values({ ...usageBase, promptTokens, completionTokens, ok: true, costMicroUsd: price ? Math.round(promptTokens * price.in + completionTokens * price.out) : 0 });
+    const costMicroUsd = price ? Math.round(promptTokens * price.in + completionTokens * price.out) : 0;
+    await db.insert(schema.aiUsage).values({ ...usageBase, promptTokens, completionTokens, ok: true, costMicroUsd });
+    await logActivity(userId, "ai.call", { details: { purpose, provider: status.kind, tier, model: cfg.model, ok: true, inTok: promptTokens, outTok: completionTokens, costMicro: costMicroUsd } });
     if (opts.cache) await db.insert(schema.aiCache).values({ key: cacheKey, userId, response: parsed as object }).onConflictDoNothing();
     return parsed;
   } catch (e) {
     // Failed calls still count as requests, so a broken loop cannot hammer the provider for free.
     await db.insert(schema.aiUsage).values({ ...usageBase, promptTokens: estimateTokens(system + user), completionTokens: 0, ok: false });
     log("warn", "ai.call_failed", { purpose, provider: status.kind, code: e instanceof AiError ? e.code : "unexpected" });
+    await logActivity(userId, "ai.call", { details: { purpose, provider: status.kind, tier, model: cfg.model, ok: false, code: e instanceof AiError ? e.code : "unexpected" } });
     throw e;
   }
 }
