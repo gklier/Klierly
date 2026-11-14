@@ -1,72 +1,56 @@
-# Test report
+# Test report (Phase 2)
 
-Run on 2026-11-14 in a Linux x86_64 container: Node 22.23, Python 3.13, PostgreSQL 16.15,
-Chromium (Playwright 1.63). Everything below was actually executed; items that could not be run are
-listed separately under **Not verified**.
+Run on 2026-11-14 in a Linux x86_64 container: Node 22, Python 3.13, PostgreSQL 16, Chromium
+(Playwright 1.63). Everything in the tables was executed. What could not be run is under
+**Not verified**, and that section matters more than the green numbers.
 
-## Commands and results
+## Results
 
 | Command | Result |
 | --- | --- |
-| `cd worker && .venv/bin/python -m pytest -q` | **25 passed** |
-| `cd web && npm run typecheck` | clean |
-| `cd web && npm run lint` | clean (0 errors, 0 warnings) |
-| `cd web && npm test` (vitest; real PostgreSQL + real worker + mock AI provider) | **65 passed** (3 files) |
-| `cd web && npm run test:e2e` (`next build`, then Playwright against the production build, fresh database) | build OK · **22 passed** (15 journey + 7 extension), repeated 4× without a flake after the fix noted below |
-| `cd extension && npm test` | **9 passed** |
-| `npm audit --omit=dev` (web) | 0 vulnerabilities (PostCSS pinned ≥ 8.5.23 via `overrides`) |
-| `pip-audit -r worker/requirements.txt` | no known vulnerabilities |
-| `curl localhost:3000/api/health` | `{"status":"ok","database":true,"worker":true}` |
-| `docker compose config` (both compose files) | valid |
+| `cd worker && python -m pytest -q` | **25 passed** |
+| `cd web && npm run typecheck` / `npm run lint` | clean / clean |
+| `cd web && npm test` (real PostgreSQL + real worker + mock AI) | **76 passed** |
+| `cd web && npm run test:e2e` (production build; Chromium with the extension loaded) | **31 passed**: 17 journey, 7 single-page capture, 7 course discovery and captions |
+| `cd extension && npm test` | **14 passed** |
+| `npm audit --omit=dev` (web) · `pip-audit` (worker, Phase 1) | 0 vulnerabilities · none known |
+| `docker compose config` | valid (syntax only) |
 
-`npm audit` including dev-only tooling still reports advisories in test/build tools that are not shipped.
+Stability: the full E2E suite was run 11 times after the last test fix: 10 clean. **One run
+reported an unexplained browser console error** in the journey suite; it did not reproduce in 7
+further runs and its text was not captured. Treat as an open flake.
 
-## Required checks
+## What Phase 2 added, and how each was checked
 
-| # | Check | Status | Evidence |
-| --- | --- | --- | --- |
-| 1 | Fresh install starts; health passes | Pass* | E2E creates a new database from migrations and boots the production build; health asserted. *The README was not replayed on a second clean machine |
-| 2 | Create/delete course; data isolation | Pass | E2E 2, 13, 15; integration "data isolation", "deletion" (rows and files checked per table) |
-| 3 | Upload PDF and text; chunks and locations inspectable; bad uploads fail clearly | Pass | E2E 3, 6; integration "ingestion"; worker parser tests (wrong type, mismatch, encrypted, empty, oversize) |
-| 4 | Paste import; module mapping and sources persist | Pass | E2E 5; integration "duplicates and pasted text" |
-| 5 | With a test AI credential: grounded study note and ≥ 10 questions; no-key / bad-key transparent | Pass with a **mock** provider | E2E 7–8; integration "AI generation" (rejections, insufficient sources, bad key, bad output, limits, course switch) |
-| 6 | MCQ and numeric scoring; deterministic math; exam grades only after submission | Pass | unit "grading"; worker numeric tests vs scipy/statsmodels; integration "timed exam reveals nothing"; E2E 10–11 |
-| 7 | History persists; mastery updates; spaced review queues a missed concept | Pass | integration "drill…"; E2E 10–11 |
-| 8 | Plan respects date, modules, minutes; missing scope warns | Pass | unit "study plan" (6 cases); integration "study plan"; E2E 9 |
-| 9 | Citations open the right document/page/excerpt; nothing fabricated | Pass | integration "every sample citation resolves…"; E2E 6, 10; unit "rejects citations to sources that were not provided" |
-| 10 | Extension: manual capture on mock LMS, preview, confirm, source appears; active quiz blocked; minimal permissions | Pass, with a test seam | E2E extension 1–7 against the real web app; manifest test. See note |
-| 11 | Playwright E2E; unit tests for parsing, math, schema, auth/ownership, prompt injection | Pass | above |
-| 12 | Build, Python tests, type checks; no console errors or dead navigation | Pass | console errors are collected across the journey and asserted empty (expected 403/404/415 responses provoked by the tests are excluded) |
+| Feature | Evidence |
+| --- | --- |
+| Rename to Klierly | all suites re-run after the rename; no "CourseLab" left in tracked text |
+| Managed AI: no key needed, quotas, tiering, cost accounting, key secrecy, BYOK precedence | integration "managed AI" (6 tests): per-student daily and monthly limits, shared daily cap, monthly budget stop, failed calls counted, routine model first and stronger model only on retries, cost computed from configured prices, status object free of credentials. E2E 7, 8, 8b: generation with no key entered, usage shown, operator page totals, page source never contains the key, students get 404 on `/admin` |
+| "AI not configured" state | manual run on a server without `MANAGED_AI_*`: Practice, Settings and Blueprint show the plain explanation |
+| Course discovery | E2E discovery 1–5, 7 against a mock course site: inventory of 3 modules / 13 items with reasons for the 7 not offered; nothing opened or sent during scan; range selection; approval required; 4 imported, 2 reported (unsupported type, no download link); quiz, assignment, discussion, external tool never opened; no LMS API call; modules created by name; PDF page provenance preserved; sync leaves 3 unchanged, replaces 1 changed page, no duplicates; stop and resume; token and ownership enforced |
+| Lecture captions | E2E discovery 6: captions from a player on the page and from a player in a cross-site frame, imported as WebVTT, searchable, citation shows the lecture timestamp. Unit: VTT formatting |
+| Structure-preserving capture, topic quality | unit "topic headings (from a real course report)" uses the founder's reported cases; integration: AI topic suggestions drop a bare label, an invented subject and an uncited one, supersede heading guesses, apply nothing without review |
+| Exam blueprint and follow-up | unit (allocation sums, floors, damping; quota selection with top-up); E2E 10b: scope follows the plan, gaps generated, exam built to it, results offer a weak-topic drill and fresh questions |
+| Partial-result handling | found by E2E: two quick generations hit the burst limit and lost finished work; generation now keeps what was saved and reports why it stopped |
+| CI | workflow written and YAML-validated; its secret/upload checks pass locally |
 
-**Extension test seam.** Automation cannot click the browser toolbar, so `activeTab` is never granted
-to a test. The E2E copies the extension to a temp folder and adds a host permission for the local
-fixture server *to that copy only*; the popup accepts `?tabId=`. The shipped manifest is asserted to
-contain exactly `activeTab`, `scripting`, `storage`. The real toolbar click was therefore **not**
-exercised by a machine — try it once by hand (README → Browser extension).
+## Not verified — read this before relying on anything
 
-## Bugs the tests caught (all fixed)
-
-- Scheduler dropped a spaced review that landed on mock-exam day and reported it as "did not fit".
-- A pasted page naming its module only in the text was not auto-mapped; then a syllabus processed
-  *after* the module notes was mis-mapped to a module (order-dependent). Replaced with a per-document
-  module hint; regression test added.
-- "Use this date and scope" did not untick out-of-scope modules (stale form state).
-- Progress page crashed once answers existed (constant imported from a client component).
-- Header overflowed at phone width.
-- Extension source contained raw invisible Unicode in a regular expression and did not parse.
-
-## Not verified — please read
-
-- **Real AI provider.** Generation was only run against the bundled deterministic mock. Prompts,
-  JSON handling and the validators are tested; the *quality* of questions from a real model on real
-  course material is untested. First real run should be watched closely.
-- **Docker.** No Docker daemon was available: the Dockerfiles and compose files are syntax-checked
-  but never built or started, on amd64 or arm64.
-- **Real LMS pages.** The extension was tested on synthetic pages only. Real Canvas pages may render
-  content in frames or block extensions; the extractor does not read frames by design.
-- **Other browsers.** Chromium only. Edge should behave the same; Firefox is not targeted.
-- **Founder's actual QMB 3250 material** was not available; all course content in tests is synthetic.
-- **Scale and load**: single user, small files. **Accessibility**: keyboard paths and labels were
-  exercised by the E2E, but no screen-reader or automated contrast audit was run.
-- **External policies** (Chrome Web Store, Instructure, UF, NaviGator, Oracle Always Free limits)
-  were designed for, not re-verified line by line; re-read them before publication or deployment.
+1. **Real Canvas (UF or any).** Discovery, file download and caption reading have only met a
+   synthetic mock that I wrote from my understanding of Canvas pages. The founder's first real run
+   used the *old* single-page capture and already exposed two defects (now fixed). Expect the
+   Canvas adapter to need adjustment on first contact: Modules page structure, download redirects
+   to a separate file host, and which video platform the course uses.
+2. **Permission prompts.** Automation cannot click Chrome's permission dialogs, so tests run a
+   temporary copy of the extension with site access pre-granted. The real "Allow for this site"
+   click, and whether access persists across the tab navigations discovery performs, are unverified.
+3. **Real AI.** No provider is configured and no real model has been called. Managed AI, question
+   generation, topic suggestions and blueprint filling were exercised against a deterministic mock.
+   Question *quality* on real statistics material is unknown; the checks guarantee structure,
+   sources and arithmetic only.
+4. **Institutional permission** to use the extension on a university course site: not checked with UF.
+5. **Docker / Oracle ARM64.** No Docker daemon available: images never built or started.
+6. **CI on GitHub.** The workflow has not run yet; it will on the pull request.
+7. **Video platforms.** Only standard HTML text tracks and visible transcript panels are read.
+   Whether QMB 3250's player exposes either is unknown.
+8. Edge and Firefox untested. No screen-reader or load testing.

@@ -88,6 +88,30 @@ rate limits on sign-in, imports and AI calls, AI endpoint validation (https; pri
 if enabled — DNS rebinding is not defended, see ROADMAP), originals served only as attachments,
 log redaction, security headers.
 
+## Phase 2 additions
+
+- **Managed AI** (`lib/ai/provider.ts`): `aiStatus()` resolves BYOK → managed → none and returns a
+  credential-free status for the UI; `chatJson()` enforces per-student and global quotas, a burst
+  limit, caching and tiering (routine model first, stronger model only for validation retries), and
+  records provider, tier, tokens and estimated cost in `ai_usage`. Operator view at `/admin`.
+  Credentials exist only in the server environment. See `docs/MANAGED_AI.md`.
+- **Course discovery** (`extension/src/lms/`, `discover.js`): LMS adapters read rendered pages in
+  the student's tab (no LMS API). The server stores `external_id` per source; `createSource()`
+  returns `created | unchanged | updated`, replaces a changed resource, and files sources under
+  modules by name. Endpoints: `GET /api/ext/courses/:id/sources`, `POST /api/ext/import-file`.
+  Access model and open questions: `docs/LMS_ACCESS.md`.
+- **Structure-preserving capture**: page captures arrive as light Markdown (headings, list items),
+  so objectives and sections survive. **Topics**: stricter heading filter plus `proposeTopics()`
+  (one AI request; suggestions must cite a provided excerpt and be findable in the material; always
+  reviewed by the student).
+- **Captions** (`extension/src/captions.js`): text tracks and transcript panels → WebVTT → the
+  normal upload path, keeping timestamps for citations.
+- **Blueprint** (`lib/practice/blueprint.ts`): questions per topic in proportion to material volume
+  (square-root damped), gap analysis against the bank, `pickByQuota()` for the mock exam, and
+  targeted follow-up from results (drill weak topics, generate fresh questions on them).
+- **CI** (`.github/workflows/ci.yml`): worker tests, extension tests and packaging, web type check,
+  lint, audit, integration and E2E with Postgres, plus a check that no secrets or uploads are tracked.
+
 ## Deployment options
 
 - **Local** (default): processes or `docker compose up`; web bound to 127.0.0.1.

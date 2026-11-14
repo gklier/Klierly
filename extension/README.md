@@ -14,9 +14,15 @@ Not affiliated with or endorsed by any LMS or university, and not an official Ca
 
 ## Use
 
-Open a course page → click the toolbar icon → check the preview and title → choose course and module
-→ tick the declaration → **Import** → follow the link to the new source. If you highlighted text
-first, only the selection is captured (toggle available).
+- **Discover this course** — on a Canvas course page, click the icon → *Discover this course*. Allow
+  access to that site when Chrome asks, scan, choose a module range or single items, review what will
+  be imported and what is skipped (with reasons), tick the declaration, import. Stop any time; resume
+  later. Scan again another day: imported items are marked, unchanged ones are not duplicated, changed
+  pages are replaced.
+- **Capture this page** — click the icon on any page, check the preview, choose course and module,
+  tick the declaration, Import. Highlight text first to capture only the selection.
+- **Import captions** — on a page with a lecture video, click the icon → *Import its captions or
+  transcript*. Embedded players need a one-time permission for the video site.
 
 ## What it does and does not read
 
@@ -27,9 +33,10 @@ first, only the selection is captured (toggle available).
 | | Navigation, sidebars, footers; blocks that look like grades or class lists |
 | | Any other tab; anything before you click the icon |
 
-Permissions: `activeTab` (the tab you clicked on, for that click), `scripting` (to run the reader in
-that tab), `storage` (server address and token in this browser). No host permissions, no background
-script, no remote code.
+Permissions at install: `activeTab`, `scripting`, `storage` — nothing else. Access to a course site
+or a video site is **optional**, asked per site through Chrome's own prompt at the moment you start
+discovery or caption reading, and removable. No background script, no remote code, no Canvas API,
+no LMS tokens, no cookies. Access model and open questions: `../docs/LMS_ACCESS.md`.
 
 ## Pages it refuses
 
@@ -44,15 +51,21 @@ what you are permitted to use. A syllabus that merely mentions exams gets at mos
 
 ## Known limits
 
-- Many LMS pages show content inside frames; frames are not read by design. Use copy/paste or upload.
+- **Not yet run against a real Canvas site by automated tests.** The Canvas adapter is tested on a
+  synthetic mock; selectors may need adjusting.
+- Files are read through the download link the page shows. If the LMS serves files from another
+  address and the browser refuses, the item is reported and you upload it yourself.
+- Captions: only what a player exposes as standard text tracks or a visible transcript panel.
+  Players that draw captions themselves expose nothing; use the player's own transcript download.
+- Quizzes, assignments, discussions, grades, people pages, locked items and external tools are never imported.
 - If a site or your institution blocks extensions on a page, the extension says so and stops.
   It does not try to get around restrictions.
 - Tested on Chromium with synthetic pages only (see `../TEST_REPORT.md`).
 
 ## Tests
 
-`npm test` (guard, text cleaning, manifest minimality). End-to-end tests against the real web app
-live in `../web/e2e/extension.spec.ts` and run with `cd ../web && npm run test:e2e`.
+`npm test` (guard, cleaning, Canvas adapter, captions, manifest minimality). End-to-end tests against the
+real web app live in `../web/e2e/extension.spec.ts` and `../web/e2e/discovery.spec.ts` and run with `cd ../web && npm run test:e2e`.
 
 ## Before publishing to a store (not done)
 

@@ -1,26 +1,33 @@
 # Roadmap
 
-## Works now (Phase 1 and 1b)
+## Works now
 
-Accounts (first-user / invite code) · courses · upload of PDF, DOCX, PPTX, TXT, Markdown, HTML, CSV,
-XLSX, SRT, VTT · paste · duplicate handling, retries, per-file errors · source viewer with page /
-slide / timestamp · search · suggestions for modules, topics, objectives, dates and exam scope ·
-manual module/topic mapping · coverage warnings · OpenAI-compatible AI connection with test button,
-encrypted key, usage counts, daily limit, cache · validated question generation · study notes ·
-Learn / Drill / Timed mock exam / Review mistakes · hints · calculator and scratchpad · mistake
-tagging · bad-question reports · mastery, spaced review, readiness heuristic · study plan with
-regeneration · deletion of source / course / account · light/dark, phone layout · synthetic sample
-course · MV3 extension with preview, declaration, assessment/grades blocking.
+Phase 1: accounts · courses · upload/paste of ten formats · source viewer with page/slide/timestamp ·
+search · reviewable suggestions · study plan · Learn / Drill / Timed exam / Review · validated
+question generation · mastery, spaced review, readiness heuristic · deletion · sample course ·
+single-page capture extension.
+
+Phase 2: **managed AI** with quotas, cost accounting and operator page (mock-tested; not configured)
+· **course discovery** for Canvas-style sites with selection, preview, progress, stop/resume and
+sync · **lecture captions** · structure-preserving capture · **AI topic suggestions** · **exam
+blueprint**, blueprint-weighted mock exam, targeted follow-up · **CI**.
+
+## Next, in order
+
+1. **Real-course shakedown (QMB 3250 at UF)**: run discovery and captions on the real site; adjust
+   Canvas selectors, file-download handling and caption reading to what is actually there.
+2. **Configure a managed AI provider** (founder decision) and evaluate question quality on real material.
+3. Captions inside course discovery (today captions are imported per page, not as part of a course run).
+4. Official Canvas OAuth with an institution-issued developer key, replacing page reading where a university approves it.
 
 ## Deliberately not built (hidden, no dead buttons)
 
 | Item | Note |
 | --- | --- |
-| Official Canvas OAuth + incremental sync | Needs an institution-issued developer key. Interface: an LMS adapter producing the same `createSource()` inputs. No "Connect Canvas" button exists |
-| Other LMS integrations | Same adapter shape |
+| Official Canvas OAuth | Needs an institution-issued developer key. No "Connect Canvas" button exists |
+| Other LMS platforms | Adapter interface exists (`extension/src/lms/`); only Canvas is written |
 | OCR for scanned PDFs | Currently rejected with a clear message |
 | Embeddings / pgvector | Slot behind `searchChunks()` |
-| AI topic proposals | Topics today come from headings; an AI pass could propose better ones, still reviewed by the student |
 | Diagram and audio presentation modes, mini games, video | Not started; plan form offers only the two modes that exist |
 | Collaboration, instructor features, mobile apps, billing | Not started |
 | Email (verification, password reset) | Not started — a forgotten password currently needs the operator |

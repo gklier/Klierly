@@ -22,3 +22,22 @@
 - **Helpers**: two sub-agents were started for the worker and the extension and stopped early on an
   account spending limit; their partial files were reviewed, completed and tested by the lead.
 - **Not done on purpose**: no deployment, no purchases, no domain, no accounts created anywhere.
+
+## Phase 2
+
+- **Renamed to Klierly** everywhere user-facing, in package and database names and in docs. Git history kept.
+- **No Canvas API from the extension.** Instructure's API policy assumes registered, token-based apps
+  and prohibits unapproved connection methods, so discovery reads rendered pages in the student's own
+  tab instead. Trade-off accepted: slower and dependent on page structure, but inside what a student's
+  browser already shows them. Institutional permission is still an open question (`docs/LMS_ACCESS.md`).
+- **Site access is optional and per site**, requested through Chrome's prompt when discovery or
+  caption reading starts. Install-time permissions stay at three.
+- **Managed AI is configuration, not code paths**: off unless three server variables are set. BYOK
+  wins when present. Stronger model only on validation retries. Failed calls count against quota.
+- **Generation keeps partial results** and reports why it stopped, after tests showed two quick
+  clicks could hit the burst limit and lose finished work.
+- **Topics**: the first real-course run showed heading-derived topics were poor. Heading filter
+  tightened with those exact cases as tests; AI suggestions added, always reviewed, never auto-applied.
+- **Captures keep structure** as light Markdown so headings and objectives survive import.
+- **Blueprint weights by material volume**, labelled as a study aid, never as the instructor's design.
+- **NaviGator** stays BYOK-only and experimental: its page does not address third-party use.

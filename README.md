@@ -53,28 +53,22 @@ creates an account with the sample course.
 | `TZ` | Time zone for "today" in plans |
 | `ALLOW_PRIVATE_AI_ENDPOINTS` | `true` allows http://localhost model servers; set `false` on a shared server |
 
-## Try it without an AI key
+## AI: included, your own, or none
 
-On the Courses page choose **Load the sample course**. It imports a *synthetic* statistics course
-(`fixtures/qmb-sample`, written for this app — not real university content) through the normal
-pipeline and adds 35 hand-written questions whose numeric answers are recomputed by the worker.
-Everything except generating new questions and notes works without a key.
+| Mode | Who pays | How |
+| --- | --- | --- |
+| **Klierly AI (managed)** | The operator | Set `MANAGED_AI_BASE_URL`, `MANAGED_AI_API_KEY`, `MANAGED_AI_MODEL` on the server. Students then need no key; they get a free allowance with visible usage. Details and limits: `docs/MANAGED_AI.md` |
+| **Your own provider** | The student | Settings → AI connection: base URL, model ID, API key, Test connection. Takes precedence over Klierly AI |
+| **None** | — | Import, search, study plan, practice on existing questions, grading and progress all still work |
 
-## Connect an AI provider (optional)
+**Managed AI is OFF until the operator configures it, and no real provider has been configured or
+paid for.** It has been tested only against the bundled mock (`cd web && npm run mock-llm` →
+`http://127.0.0.1:4010/v1`, key `test-key`, model `mock-1`), whose questions are structurally valid
+but trivial. A ChatGPT or Claude subscription login is not an API credential and cannot be used.
+UF NaviGator is experimental and BYOK-only; see `docs/MANAGED_AI.md`.
 
-Settings → AI connection: base URL (ending before `/chat/completions`), model ID, API key, then
-**Test connection**. Any OpenAI-compatible API works, including a model on your own machine.
-A ChatGPT/Claude subscription login is not an API key. The key is stored encrypted, never returned
-to the browser, never logged. Only when you click Generate, the course name, topic names and up to
-six short excerpts per topic are sent to that provider. A daily request limit protects your quota.
-
-UF NaviGator Toolkit is listed as **experimental**: confirm in UF's current terms that your
-allocation may be used with a third-party tool, and take the endpoint and model ID from UF's
-documentation, before using it. Klierly makes no claim about either.
-
-For testing without a paid provider: `cd web && npm run mock-llm` starts a deterministic stand-in
-(base URL `http://127.0.0.1:4010/v1`, key `test-key`, model `mock-1`). Its questions are
-structurally valid but trivial — it exists to test the pipeline, not to study from.
+The sample course (Courses → **Load the sample course**) is synthetic, comes with 35 checked
+questions, and needs no AI.
 
 ## Study for a real exam (QMB 3250 walk-through)
 
@@ -84,7 +78,9 @@ structurally valid but trivial — it exists to test the pipeline, not to study 
    text layer are rejected with a clear message (no OCR yet).
 3. Review **Suggestions from your materials** (modules, topics, objectives, dates — each links to the
    passage it came from). Accept, dismiss, or fix module/topic mapping by hand. **Coverage** shows gaps.
-4. **Practice → Generate new questions** (needs the AI connection). Drafts with a wrong calculation,
+   Headings often make poor topics; **Suggest topics with AI** (Materials → Topics) proposes real subjects for you to review.
+4. **Practice → Generate new questions** (needs AI: included or your own), or **Use the exam blueprint** to see how many
+   questions each topic should get, generate only the missing ones, and take a mock exam mixed to it. Drafts with a wrong calculation,
    no real source, duplicate wording or more than one correct answer are discarded.
 5. **Study plan → Prepare for an exam**: real exam date, modules covered, minutes per day, how sessions
    start, optional self-ratings, exam format if announced. Unknown format is labelled, not guessed.
@@ -94,12 +90,21 @@ structurally valid but trivial — it exists to test the pipeline, not to study 
    grade prediction). **Update plan** re-weights the schedule and reschedules missed days.
 8. Delete a source (its page), a course (course settings) or everything (Settings → Delete account).
 
-## Browser extension (optional)
+## Browser extension
 
-Chrome/Edge: `chrome://extensions` (or `edge://extensions`) → Developer mode → **Load unpacked** →
-choose the `extension/` folder. Then in Klierly: Settings → Browser extension → **Create pairing
-token**; paste the server address and token into the extension's settings. Details, limits and the
-pre-publication checklist: `extension/README.md`.
+Chrome: `chrome://extensions` → Developer mode → **Load unpacked** → choose the `extension/` folder.
+In Klierly: Settings → Browser extension → **Create pairing token**; paste the server address and
+token into the extension's settings.
+
+- **Discover this course** (on a Canvas course page): lists modules and items, lets you pick a
+  module range or single items, shows what will and will not be imported and why, then imports with
+  progress, stop and resume. Run it again later to pick up new or changed pages.
+- **Capture this page**: one page, preview first.
+- **Import captions**: on a page with a lecture video, reads the captions the player exposes, with timestamps.
+
+It reads rendered pages in your own tab and does not use the Canvas API. What that relies on, and
+what has not been established (institutional permission, real Canvas compatibility): `docs/LMS_ACCESS.md`.
+More detail: `extension/README.md`.
 
 ## Tests
 
@@ -113,7 +118,8 @@ cd extension && npm test
 
 ## Founder action required
 
-- **AI provider**: choose one and enter its key in Settings (or confirm NaviGator's terms first).
+- **Managed AI**: choose and fund a provider, then set the three `MANAGED_AI_*` variables. Until then students need their own key.
+- **UF / Canvas**: confirm that using the extension on your course site is permitted (`docs/LMS_ACCESS.md`).
 - **Real pilot**: import your own permitted QMB 3250 material; check your syllabus/instructor rules on
   sharing material with outside AI services and set the per-course switch accordingly.
 - **Before any public launch**: legal review of the privacy draft, hosting decision (nothing has been
