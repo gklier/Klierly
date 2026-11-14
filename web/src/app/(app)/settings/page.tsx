@@ -4,7 +4,7 @@ import { db, schema } from "@/db";
 import { deleteAccountAction, removeProvider, revokeExtensionToken, saveProvider, testProvider } from "@/app/actions/settings";
 import { ActionForm, Submit } from "@/components/forms";
 import { TokenForm } from "@/components/token-form";
-import { getProvider, usageToday } from "@/lib/ai/provider";
+import { aiStatus, getProvider, usageToday } from "@/lib/ai/provider";
 import { requireUser } from "@/lib/auth";
 import { env } from "@/lib/env";
 
@@ -13,8 +13,8 @@ export const metadata = { title: "Settings" };
 export default async function SettingsPage() {
   const user = await requireUser();
   const since = new Date(Date.now() - 30 * 86400_000);
-  const [provider, used, [month], tokens] = await Promise.all([
-    getProvider(user.id), usageToday(user.id),
+  const [provider, used, ai, [month], tokens] = await Promise.all([
+    getProvider(user.id), usageToday(user.id), aiStatus(user.id),
     db.select({ n: sql<number>`count(*) filter (where not cached)::int`, cached: sql<number>`count(*) filter (where cached)::int`, failed: sql<number>`count(*) filter (where not ok)::int`, pt: sql<number>`coalesce(sum(prompt_tokens), 0)::int`, ct: sql<number>`coalesce(sum(completion_tokens), 0)::int` })
       .from(schema.aiUsage).where(and(eq(schema.aiUsage.userId, user.id), gte(schema.aiUsage.createdAt, since))),
     db.select().from(schema.extensionTokens).where(eq(schema.extensionTokens.userId, user.id)).orderBy(desc(schema.extensionTokens.createdAt)),
@@ -27,7 +27,22 @@ export default async function SettingsPage() {
 
       <section id="ai" className="scroll-mt-20" aria-labelledby="ai-h">
         <h2 id="ai-h" className="text-lg font-semibold">AI connection</h2>
-        <p className="mt-1 text-sm text-muted">Optional. Without it you can import, search, plan and practise with existing questions. With it, Klierly can write new questions and study notes from your materials. It works with any provider that offers an OpenAI-compatible API (a <code>/chat/completions</code> endpoint).</p>
+        {ai.kind === "managed" && (
+          <div className="panel mt-3 p-4 text-sm" data-testid="managed-ai">
+            <p><strong>{ai.label} is included</strong> <span className={`badge ml-1 ${ai.available ? "badge-good" : "badge-warn"}`}>{ai.available ? "Ready" : "Allowance used up"}</span></p>
+            <p className="mt-1 text-muted">You do not need a key. Klierly writes new questions and study notes from your materials with a provider it pays for, within a free allowance.</p>
+            <div className="mt-3 grid gap-3 sm:grid-cols-2">
+              <div><p className="text-muted">Requests today</p><p className="tnum font-semibold">{ai.usedToday} of {ai.dailyLimit}</p>
+                <div className="mt-1 h-1.5 overflow-hidden rounded bg-surface-2"><div className="h-full bg-accent" style={{ width: `${Math.min(100, (ai.usedToday / Math.max(1, ai.dailyLimit)) * 100)}%` }} /></div></div>
+              <div><p className="text-muted">Monthly allowance</p><p className="tnum font-semibold">{Math.round((ai.tokensThisMonth / Math.max(1, ai.monthlyTokenLimit)) * 100)}% used</p>
+                <div className="mt-1 h-1.5 overflow-hidden rounded bg-surface-2"><div className="h-full bg-accent" style={{ width: `${Math.min(100, (ai.tokensThisMonth / Math.max(1, ai.monthlyTokenLimit)) * 100)}%` }} /></div></div>
+            </div>
+            {!ai.available && <p className="mt-3 text-warn">{ai.reason}</p>}
+            <p className="mt-3 text-muted">When you click Generate, the course name, topic names and up to 6 short excerpts per topic go to Klierly&apos;s provider at {ai.host}. Nothing else is sent, and you can switch AI off per course in its settings.</p>
+          </div>
+        )}
+        {!ai.kind && <p className="notice mt-3 text-sm">{ai.reason}</p>}
+        <p className="mt-3 text-sm text-muted">{ai.kind === "managed" || provider ? "Optional: use your own provider instead. " : ""}Any provider with an OpenAI-compatible API (a <code>/chat/completions</code> endpoint) works. When your own provider is connected it is used instead of the included one, with your own limits.</p>
 
         {provider && (
           <div className="panel mt-3 p-4 text-sm">
@@ -44,7 +59,7 @@ export default async function SettingsPage() {
         )}
 
         <ActionForm action={saveProvider} className="panel mt-3 space-y-4 p-5">
-          <h3 className="font-semibold">{provider ? "Change the connection" : "Connect a provider"}</h3>
+          <h3 className="font-semibold">{provider ? "Change your own connection" : "Connect your own provider (optional)"}</h3>
           <div>
             <label className="label" htmlFor="preset">Type</label>
             <select id="preset" name="preset" className="input" defaultValue={provider?.preset ?? "openai-compatible"}>

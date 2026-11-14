@@ -125,30 +125,18 @@ test("6. search opens the exact excerpt with its page number", async () => {
   await expect(page.getByText("Nothing is highlighted rather than guessing")).toBeVisible();
 });
 
-test("7. without an AI key the app says so; a bad key fails transparently; a good one connects", async () => {
+test("7. zero configuration: AI is included and no key is asked for; usage is visible", async () => {
   await page.goto(`${courseUrl}/practice`);
-  await expect(page.getByText("AI key required for generating new sets.")).toBeVisible();
-  await expect(page.getByRole("button", { name: "Start drill" })).toBeDisabled();
-  await page.getByRole("link", { name: "Connect an AI provider" }).click();
-  await page.getByLabel("Base URL").fill("http://127.0.0.1:4012/v1");
-  await page.getByLabel("Model ID").fill("mock-1");
-  await page.getByLabel("API key").fill("definitely-wrong-key");
-  await page.getByText("I understand that excerpts").click();
-  await page.getByRole("button", { name: "Save connection" }).click();
-  await expect(page.getByText("Saved. Use “Test connection”")).toBeVisible();
-  await page.getByRole("button", { name: "Test connection" }).click();
-  await expect(page.getByText("The AI provider rejected the API key.")).toBeVisible();
-  await expect(page.getByText("Last test failed")).toBeVisible();
-  await page.getByLabel("API key").fill("test-key");
-  await page.getByText("I understand that excerpts").click();
-  await page.getByRole("button", { name: "Save connection" }).click();
-  await expect(page.getByText("key ending …-key")).toBeVisible();
-  await page.getByRole("button", { name: "Test connection" }).click();
-  await expect(page.getByText("Connected. 127.0.0.1:4012 answered")).toBeVisible();
-  expect(await page.content()).not.toContain("test-key"); // the key is never sent back to the browser
+  await expect(page.getByTestId("ai-usage")).toContainText("Klierly AI is included — no key needed.");
+  await expect(page.getByTestId("ai-usage")).toContainText("0 of 40 free requests used today");
+  await expect(page.getByRole("button", { name: "Start drill" })).toBeDisabled(); // no questions yet
+  await page.goto("/settings");
+  await expect(page.getByTestId("managed-ai")).toContainText("Klierly AI is included");
+  await expect(page.getByTestId("managed-ai")).toContainText("0 of 40");
+  expect(await page.content()).not.toContain("test-key"); // server-side credential never reaches the browser
 });
 
-test("8. generate source-grounded questions and a study note", async () => {
+test("8. generate source-grounded questions and a study note without entering a key", async () => {
   await page.goto(`${courseUrl}/practice`);
   const gen = page.getByRole("region", { name: "Generate new questions" });
   for (const box of await gen.getByRole("checkbox").all()) if (await box.isEnabled()) await box.check();
@@ -169,6 +157,45 @@ test("8. generate source-grounded questions and a study note", async () => {
   await expect(page.getByText("AI-generated from your materials")).toBeVisible({ timeout: 30_000 });
   await expect(page.getByRole("list").getByRole("link", { name: /Module \d/ }).first()).toBeVisible();
   await expect(page.getByText("uncited claim")).toHaveCount(0);
+
+  // Usage feedback for the student, and cost monitoring for the operator.
+  await page.goto(`${courseUrl}/practice`);
+  const usedText = await page.getByTestId("ai-usage").innerText();
+  const used = Number(/(\d+) of 40 free requests/.exec(usedText)?.[1]);
+  expect(used).toBeGreaterThanOrEqual(6);
+  await page.goto("/admin");
+  await expect(page.getByRole("heading", { name: "Operator: managed AI" })).toBeVisible();
+  await expect(page.getByTestId("month-total")).toContainText(`${used} requests · $0.`);
+  await expect(page.getByRole("cell", { name: "founder@e2e.test" })).toBeVisible();
+  expect(await page.content()).not.toContain("test-key");
+});
+
+test("8b. optional own provider: a bad key fails transparently, a good one connects and takes over, removing it returns to the included AI", async () => {
+  await page.goto("/settings");
+  await page.getByLabel("Base URL").fill("http://127.0.0.1:4012/v1");
+  await page.getByLabel("Model ID").fill("mock-1");
+  await page.getByLabel("API key").fill("definitely-wrong-key");
+  await page.getByText("I understand that excerpts").click();
+  await page.getByRole("button", { name: "Save connection" }).click();
+  await expect(page.getByText("Saved. Use “Test connection”")).toBeVisible();
+  await page.getByRole("button", { name: "Test connection" }).click();
+  await expect(page.getByText("The AI provider rejected the API key.")).toBeVisible();
+  await expect(page.getByText("Last test failed")).toBeVisible();
+  await page.getByLabel("API key").fill("test-key");
+  await page.getByText("I understand that excerpts").click();
+  await page.getByRole("button", { name: "Save connection" }).click();
+  await expect(page.getByText("key ending …-key")).toBeVisible();
+  await page.getByRole("button", { name: "Test connection" }).click();
+  await expect(page.getByText("Connected. 127.0.0.1:4012 answered")).toBeVisible();
+  expect(await page.content()).not.toContain("test-key"); // the key is never sent back to the browser
+  await page.goto(`${courseUrl}/practice`);
+  await expect(page.getByTestId("ai-usage")).toContainText("Using your own provider at 127.0.0.1:4012 (mock-1).");
+  await page.goto("/settings");
+  await page.getByRole("button", { name: "Remove provider" }).click();
+  await expect(page.getByText("key ending")).toHaveCount(0); // the saved key is gone
+  await expect(page.getByTestId("managed-ai")).toContainText("Ready");
+  await page.goto(`${courseUrl}/practice`);
+  await expect(page.getByTestId("ai-usage")).toContainText("Klierly AI is included");
 });
 
 test("9. build a study plan that respects date, modules and minutes", async () => {
@@ -311,7 +338,9 @@ test("13. another user cannot see this course; the sample course works without a
   await expect(other.getByText("Synthetic sample").first()).toBeVisible();
   await other.getByRole("link", { name: "Practice", exact: true }).click();
   await expect(other.getByText("35 questions in this course")).toBeVisible();
-  await expect(other.getByText("AI key required for generating new sets.")).toBeVisible();
+  await expect(other.getByTestId("ai-usage")).toContainText("Klierly AI is included");
+  expect((await other.goto("/admin"))!.status()).toBe(404); // operator page is not visible to students
+  await other.goBack();
   await other.getByRole("button", { name: "Start drill" }).click();
   await expect(other.getByTestId("stem")).toBeVisible();
   await other.close();

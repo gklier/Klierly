@@ -3,7 +3,7 @@ import { and, desc, eq, sql } from "drizzle-orm";
 import { db, schema } from "@/db";
 import { Icon } from "@/components/icons";
 import { StripPlot } from "@/components/strip-plot";
-import { getProvider } from "@/lib/ai/provider";
+import { aiStatus } from "@/lib/ai/provider";
 import { requireUser } from "@/lib/auth";
 import { getCourse, pendingProposalCount, topicStates } from "@/lib/courses";
 import { daysBetween, formatDate, today } from "@/lib/dates";
@@ -16,7 +16,7 @@ export default async function CourseOverview({ params }: { params: Promise<{ cou
   const user = await requireUser();
   const course = await getCourse(user.id, (await params).courseId);
   const [topics, plan, pending, provider, docs, [answered]] = await Promise.all([
-    topicStates(user.id, course.id), getPlan(user.id, course.id), pendingProposalCount(course.id), getProvider(user.id),
+    topicStates(user.id, course.id), getPlan(user.id, course.id), pendingProposalCount(course.id), aiStatus(user.id),
     db.select().from(schema.sourceDocuments).where(eq(schema.sourceDocuments.courseId, course.id)).orderBy(desc(schema.sourceDocuments.createdAt)),
     db.select({ n: sql<number>`count(*)::int` }).from(schema.answers).where(and(eq(schema.answers.courseId, course.id), sql`${schema.answers.isCorrect} is not null`)),
   ]);
@@ -32,7 +32,7 @@ export default async function CourseOverview({ params }: { params: Promise<{ cou
   const steps = [
     { done: docs.some((d) => d.status === "ready"), label: "Import course material", href: `${base}/materials`, hint: "Syllabus, notes, slides or readings you are allowed to use" },
     { done: topics.length > 0 && pending === 0, label: pending > 0 ? `Review ${pending} suggestions from your materials` : "Confirm modules and topics", href: `${base}/materials`, hint: "Accept or correct what was found in your files" },
-    { done: questions > 0, label: "Get practice questions", href: `${base}/practice`, hint: provider ? "Generate questions from your materials" : "Needs an AI provider (the sample course already has questions)" },
+    { done: questions > 0, label: "Get practice questions", href: `${base}/practice`, hint: provider.kind ? "Generate questions from your materials" : "Needs AI to be set up (the sample course already has questions)" },
     { done: Boolean(plan), label: "Prepare for your exam", href: `${base}/plan`, hint: "Set the date, scope and minutes per day" },
     { done: (answered?.n ?? 0) > 0, label: "Take a first practice session", href: `${base}/practice`, hint: "Progress and readiness start from your answers" },
   ];

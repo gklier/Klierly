@@ -3,6 +3,7 @@ import { logout } from "@/app/actions/auth";
 import { Icon } from "@/components/icons";
 import { ThemeToggle } from "@/components/theme-toggle";
 import { requireUser } from "@/lib/auth";
+import { env } from "@/lib/env";
 
 export const dynamic = "force-dynamic";
 
@@ -17,6 +18,7 @@ export default async function AppLayout({ children }: { children: React.ReactNod
           <nav aria-label="Main" className="flex items-center gap-1">
             <Link href="/" className="btn btn-quiet btn-sm max-sm:hidden">Courses</Link>
             <Link href="/settings" className="btn btn-quiet btn-sm">Settings</Link>
+            {env.adminEmails.includes(user.email) && <Link href="/admin" className="btn btn-quiet btn-sm max-sm:hidden">Operator</Link>}
           </nav>
           <div className="ml-auto flex items-center gap-1">
             <ThemeToggle />

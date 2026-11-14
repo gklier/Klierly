@@ -31,11 +31,59 @@ export async function getProvider(userId: string) {
   return row ?? null;
 }
 
-export async function usageToday(userId: string): Promise<number> {
-  const since = new Date(); since.setHours(0, 0, 0, 0);
+const startOfDay = () => { const d = new Date(); d.setHours(0, 0, 0, 0); return d; };
+const startOfMonth = () => { const d = startOfDay(); d.setDate(1); return d; };
+
+export type AiKind = "managed" | "byok";
+
+/** Billable (non-cached) requests today, per provider kind. */
+export async function usageToday(userId: string, kind: AiKind = "byok"): Promise<number> {
   const [r] = await db.select({ n: sql<number>`count(*)::int` }).from(schema.aiUsage)
-    .where(and(eq(schema.aiUsage.userId, userId), gte(schema.aiUsage.createdAt, since), eq(schema.aiUsage.cached, false)));
+    .where(and(eq(schema.aiUsage.userId, userId), gte(schema.aiUsage.createdAt, startOfDay()), eq(schema.aiUsage.cached, false), eq(schema.aiUsage.provider, kind)));
   return r?.n ?? 0;
+}
+
+async function managedUsage(userId: string) {
+  const tokens = sql<number>`coalesce(sum(coalesce(prompt_tokens, 0) + coalesce(completion_tokens, 0)), 0)::int`;
+  const managed = and(eq(schema.aiUsage.provider, "managed"), eq(schema.aiUsage.cached, false));
+  const [[userMonth], [globalDay], [globalMonth]] = await Promise.all([
+    db.select({ tokens }).from(schema.aiUsage).where(and(managed, eq(schema.aiUsage.userId, userId), gte(schema.aiUsage.createdAt, startOfMonth()))),
+    db.select({ n: sql<number>`count(*)::int` }).from(schema.aiUsage).where(and(managed, gte(schema.aiUsage.createdAt, startOfDay()))),
+    db.select({ micro: sql<number>`coalesce(sum(cost_micro_usd), 0)::bigint` }).from(schema.aiUsage).where(and(managed, gte(schema.aiUsage.createdAt, startOfMonth()))),
+  ]);
+  return { userDay: await usageToday(userId, "managed"), userMonthTokens: userMonth?.tokens ?? 0, globalDay: globalDay?.n ?? 0, globalMonthUsd: Number(globalMonth?.micro ?? 0) / 1e6 };
+}
+
+export type AiStatus =
+  | { available: false; kind: null; reason: string }
+  | { available: boolean; kind: "byok"; label: string; host: string; model: string; usedToday: number; dailyLimit: number; reason?: string }
+  | { available: boolean; kind: "managed"; label: string; host: string; usedToday: number; dailyLimit: number; tokensThisMonth: number; monthlyTokenLimit: number; reason?: string };
+
+/**
+ * Which AI a user gets, and whether a request would go through right now.
+ * A user's own key (BYOK) takes precedence; otherwise the Klierly-managed
+ * provider is used if the operator configured one. Safe to send to the browser:
+ * contains no credentials.
+ */
+export async function aiStatus(userId: string): Promise<AiStatus> {
+  const own = await getProvider(userId);
+  if (own) {
+    const usedToday = await usageToday(userId, "byok");
+    const over = usedToday >= own.dailyRequestLimit;
+    return { available: !over, kind: "byok", label: "Your AI provider", host: new URL(own.baseUrl).host, model: own.model, usedToday, dailyLimit: own.dailyRequestLimit,
+      ...(over ? { reason: `Today's limit of ${own.dailyRequestLimit} requests on your own provider is used up. Raise it in Settings or continue tomorrow.` } : {}) };
+  }
+  const m = env.managedAi;
+  if (!m) return { available: false, kind: null, reason: "No AI is set up on this server. Practice with existing questions still works; generating new ones needs an AI connection." };
+  const u = await managedUsage(userId);
+  const base = { kind: "managed" as const, label: m.label, host: new URL(m.baseUrl).host, usedToday: u.userDay, dailyLimit: m.userDailyRequests, tokensThisMonth: u.userMonthTokens, monthlyTokenLimit: m.userMonthlyTokens };
+  const reason =
+    u.userDay >= m.userDailyRequests ? `You have used today's ${m.userDailyRequests} free AI requests. They reset at midnight; you can also connect your own provider in Settings.`
+    : u.userMonthTokens >= m.userMonthlyTokens ? "You have used this month's free AI allowance. It resets on the 1st; you can also connect your own provider in Settings."
+    : u.globalDay >= m.globalDailyRequests ? "The shared free AI allowance for today is used up for everyone. Try again tomorrow or connect your own provider in Settings."
+    : m.globalMonthlyUsd > 0 && u.globalMonthUsd >= m.globalMonthlyUsd ? "The shared free AI budget for this month is used up. Connect your own provider in Settings to keep generating."
+    : null;
+  return reason ? { ...base, available: false, reason } : { ...base, available: true };
 }
 
 export function extractJson(content: string): unknown {
@@ -51,8 +99,9 @@ export function extractJson(content: string): unknown {
 type ChatResult = { content: string; promptTokens: number | null; completionTokens: number | null };
 
 /** One OpenAI-compatible chat completion. Never logs prompts, outputs or keys. */
-export async function rawChat(cfg: ProviderConfig, messages: { role: "system" | "user"; content: string }[], opts: { json?: boolean; maxTokens?: number; timeoutMs?: number } = {}): Promise<ChatResult> {
-  const checked = checkBaseUrl(cfg.baseUrl);
+export async function rawChat(cfg: ProviderConfig, messages: { role: "system" | "user"; content: string }[], opts: { json?: boolean; maxTokens?: number; timeoutMs?: number; trusted?: boolean } = {}): Promise<ChatResult> {
+  // `trusted` is only for the operator-configured managed endpoint; user-supplied URLs are always checked.
+  const checked = opts.trusted ? { ok: true as const, url: cfg.baseUrl.replace(/\/+$/, "") } : checkBaseUrl(cfg.baseUrl);
   if (!checked.ok) throw new AiError("blocked_endpoint", checked.message);
   const send = async (withFormat: boolean) => fetch(`${checked.url}/chat/completions`, {
     method: "POST",
@@ -83,37 +132,52 @@ export async function rawChat(cfg: ProviderConfig, messages: { role: "system" | 
   return { content, promptTokens: body?.usage?.prompt_tokens ?? null, completionTokens: body?.usage?.completion_tokens ?? null };
 }
 
+const estimateTokens = (text: string) => Math.ceil(text.length / 4);
+
 /**
- * Chat call for a signed-in user: enforces the daily limit and a per-minute
- * limit, serves identical requests from cache, records usage (counts only).
+ * Chat call for a signed-in user. Resolves BYOK or the managed provider,
+ * enforces quotas and a per-minute limit, serves identical requests from
+ * cache, and records requests, tokens and estimated cost (never content).
+ * `tier: "strong"` uses the stronger managed model when one is configured.
  */
-export async function chatJson(userId: string, purpose: string, system: string, user: string, opts: { cache?: boolean; maxTokens?: number } = {}): Promise<unknown> {
-  const settings = await getProvider(userId);
-  if (!settings) throw new AiError("no_provider", "No AI provider is connected. Add one in Settings to generate new material.");
-  const cacheKey = sha256(JSON.stringify([userId, settings.baseUrl, settings.model, purpose, system, user]));
+export async function chatJson(userId: string, purpose: string, system: string, user: string, opts: { cache?: boolean; maxTokens?: number; tier?: "routine" | "strong" } = {}): Promise<unknown> {
+  const status = await aiStatus(userId);
+  if (!status.kind) throw new AiError("no_provider", status.reason);
+  const m = env.managedAi;
+  const own = status.kind === "byok" ? await getProvider(userId) : null;
+  const tier = status.kind === "managed" && opts.tier === "strong" && m?.strongModel ? "strong" as const : "routine" as const;
+  const cfg: ProviderConfig = own
+    ? { baseUrl: own.baseUrl, model: own.model, apiKey: decryptSecret(own.apiKeyEnc) }
+    : { baseUrl: m!.baseUrl, model: tier === "strong" ? m!.strongModel! : m!.model, apiKey: m!.apiKey };
+  const usageBase = { userId, purpose, model: cfg.model, provider: status.kind, tier };
+
+  const cacheKey = sha256(JSON.stringify([userId, cfg.baseUrl, cfg.model, purpose, system, user]));
   if (opts.cache) {
     const [hit] = await db.select({ response: schema.aiCache.response }).from(schema.aiCache)
       .where(and(eq(schema.aiCache.key, cacheKey), eq(schema.aiCache.userId, userId))).limit(1);
     if (hit) {
-      await db.insert(schema.aiUsage).values({ userId, purpose, model: settings.model, cached: true, ok: true });
+      await db.insert(schema.aiUsage).values({ ...usageBase, cached: true, ok: true });
       return hit.response;
     }
   }
-  if ((await usageToday(userId)) >= settings.dailyRequestLimit) {
-    throw new AiError("limit_reached", `Today's AI request limit (${settings.dailyRequestLimit}) is used up. Raise it in Settings or continue tomorrow.`);
-  }
-  const rl = rateLimit(`ai:${userId}`, 12, 60_000);
+  if (!status.available) throw new AiError("limit_reached", status.reason ?? "The AI allowance is used up.");
+  // One Generate click over 8 topics makes up to 16 calls (first attempt + one retry each), so the burst limit sits above that.
+  const rl = rateLimit(`ai:${userId}`, 24, 60_000);
   if (!rl.ok) throw new AiError("rate_limited", `Too many AI requests at once. Try again in ${rl.retryAfterSec}s.`);
-  const cfg = { baseUrl: settings.baseUrl, model: settings.model, apiKey: decryptSecret(settings.apiKeyEnc) };
+  // Cap the response size on the managed provider so one request cannot burn the shared budget.
+  const maxTokens = status.kind === "managed" ? Math.min(opts.maxTokens ?? 3000, 3000) : opts.maxTokens;
   try {
-    const out = await rawChat(cfg, [{ role: "system", content: system }, { role: "user", content: user }], { json: true, maxTokens: opts.maxTokens });
+    const out = await rawChat(cfg, [{ role: "system", content: system }, { role: "user", content: user }], { json: true, maxTokens, trusted: status.kind === "managed" });
     const parsed = extractJson(out.content);
-    await db.insert(schema.aiUsage).values({ userId, purpose, model: settings.model, promptTokens: out.promptTokens, completionTokens: out.completionTokens, ok: true });
+    const promptTokens = out.promptTokens ?? estimateTokens(system + user), completionTokens = out.completionTokens ?? estimateTokens(out.content);
+    const price = m && status.kind === "managed" ? m.price[tier] : null;
+    await db.insert(schema.aiUsage).values({ ...usageBase, promptTokens, completionTokens, ok: true, costMicroUsd: price ? Math.round(promptTokens * price.in + completionTokens * price.out) : 0 });
     if (opts.cache) await db.insert(schema.aiCache).values({ key: cacheKey, userId, response: parsed as object }).onConflictDoNothing();
     return parsed;
   } catch (e) {
-    await db.insert(schema.aiUsage).values({ userId, purpose, model: settings.model, ok: false });
-    log("warn", "ai.call_failed", { purpose, code: e instanceof AiError ? e.code : "unexpected" });
+    // Failed calls still count as requests, so a broken loop cannot hammer the provider for free.
+    await db.insert(schema.aiUsage).values({ ...usageBase, promptTokens: estimateTokens(system + user), completionTokens: 0, ok: false });
+    log("warn", "ai.call_failed", { purpose, provider: status.kind, code: e instanceof AiError ? e.code : "unexpected" });
     throw e;
   }
 }

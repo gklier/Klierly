@@ -15,6 +15,13 @@
       "when": 1794601289030,
       "tag": "0001_module_hint",
       "breakpoints": true
+    },
+    {
+      "idx": 2,
+      "version": "7",
+      "when": 1794629922074,
+      "tag": "0002_sync_and_managed_ai",
+      "breakpoints": true
     }
   ]
 }

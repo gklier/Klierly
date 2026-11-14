@@ -46,7 +46,8 @@ export async function generateQuestions(opts: { userId: string; courseId: string
 
     for (let round = 0; round < (opts.maxRounds ?? 2) && result.added < opts.perTopic; round++) {
       const need = opts.perTopic - result.added;
-      const out = await chatJson(opts.userId, "questions", system, questionUserPrompt({ courseName: course.name, topicName: topic.name, count: need, sources, avoid, feedback }));
+      // Routine (cheaper) model first; a retry after rejected drafts is the one place a stronger model is justified.
+      const out = await chatJson(opts.userId, "questions", system, questionUserPrompt({ courseName: course.name, topicName: topic.name, count: need, sources, avoid, feedback }), { tier: round === 0 ? "routine" : "strong" });
       const parsed = generationSchema.safeParse(out);
       if (!parsed.success) { feedback = ["The response was not the required JSON object."]; result.rejected.push(feedback[0]); continue; }
       if (parsed.data.insufficient && !parsed.data.questions.length) {

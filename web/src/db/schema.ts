@@ -68,6 +68,10 @@ export const sourceDocuments = pgTable("source_documents", {
   sha256: text("sha256").notNull(),
   storagePath: text("storage_path").notNull(),
   originUrl: text("origin_url"),
+  /** Stable id of the resource in the system it came from, e.g. "canvas:<host>:<course>:page:<id>". Used for sync. */
+  externalId: text("external_id"),
+  /** The source system's own last-modified stamp, as reported at import time. */
+  externalUpdatedAt: text("external_updated_at"),
   status: text("status").$type<"queued" | "processing" | "ready" | "failed">().notNull().default("queued"),
   parser: text("parser"),
   parserConfidence: real("parser_confidence"),
@@ -80,6 +84,7 @@ export const sourceDocuments = pgTable("source_documents", {
 }, (t) => [
   index("docs_course_idx").on(t.courseId),
   uniqueIndex("docs_course_sha_uq").on(t.courseId, t.sha256),
+  index("docs_external_idx").on(t.courseId, t.externalId),
 ]);
 
 export const sourceChunks = pgTable("source_chunks", {
@@ -316,6 +321,11 @@ export const aiUsage = pgTable("ai_usage", {
   model: text("model").notNull(),
   promptTokens: integer("prompt_tokens"),
   completionTokens: integer("completion_tokens"),
+  /** "managed" = Klierly's own provider (counts against the free quota); "byok" = the user's key. */
+  provider: text("provider").$type<"managed" | "byok">().notNull().default("byok"),
+  tier: text("tier").$type<"routine" | "strong">().notNull().default("routine"),
+  /** Estimated cost in millionths of a US dollar, from configured prices (managed provider only). */
+  costMicroUsd: integer("cost_micro_usd").notNull().default(0),
   cached: boolean("cached").notNull().default(false),
   ok: boolean("ok").notNull(),
   createdAt: createdAt(),

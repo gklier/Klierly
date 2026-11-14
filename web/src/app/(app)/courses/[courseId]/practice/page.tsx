@@ -4,7 +4,7 @@ import { db, schema } from "@/db";
 import { generateAction, startPractice } from "@/app/actions/practice";
 import { ActionForm, Submit } from "@/components/forms";
 import { Icon } from "@/components/icons";
-import { getProvider, usageToday } from "@/lib/ai/provider";
+import { aiStatus } from "@/lib/ai/provider";
 import { requireUser } from "@/lib/auth";
 import { getCourse, topicStates } from "@/lib/courses";
 import { masteryMap, questionPool } from "@/lib/practice/service";
@@ -33,9 +33,9 @@ function TopicPicker({ topics, name = "topicIds", note }: { topics: { id: string
 export default async function PracticePage({ params }: { params: Promise<{ courseId: string }> }) {
   const user = await requireUser();
   const course = await getCourse(user.id, (await params).courseId);
-  const [topics, provider, pool, mastery, recent, reported] = await Promise.all([
+  const [topics, ai, pool, mastery, recent, reported] = await Promise.all([
     topicStates(user.id, course.id),
-    getProvider(user.id),
+    aiStatus(user.id),
     questionPool(user.id, course.id),
     masteryMap(user.id, course.id),
     db.select().from(schema.practiceSessions).where(and(eq(schema.practiceSessions.courseId, course.id), eq(schema.practiceSessions.userId, user.id))).orderBy(desc(schema.practiceSessions.startedAt)).limit(8),
@@ -45,7 +45,6 @@ export default async function PracticePage({ params }: { params: Promise<{ cours
   const unseen = pool.filter((q) => q.timesSeen === 0).length;
   const reviewCount = pickQuestions(pool, mastery, "review", 60, mulberry32(1), Date.now()).length;
   const withQuestions = topics.filter((t) => t.questionCount > 0);
-  const used = provider ? await usageToday(user.id) : 0;
   const base = `/courses/${course.id}/practice`;
   const suggested = topics.filter((t) => t.hasSources).sort((a, b) => a.questionCount - b.questionCount || (a.score ?? 0.4) - (b.score ?? 0.4)).slice(0, 4).map((t) => t.id);
 
@@ -120,17 +119,26 @@ export default async function PracticePage({ params }: { params: Promise<{ cours
       {topics.length > 0 && (
         <section className="panel p-5" aria-labelledby="gen-h">
           <h2 id="gen-h" className="flex items-center gap-2 text-base font-semibold"><Icon name="spark" />Generate new questions</h2>
-          {!provider ? (
+          {!ai.kind ? (
             <div className="mt-2">
-              <p className="notice"><strong>AI key required for generating new sets.</strong> {course.isSample ? "The sample course's ready-made questions work without one. " : ""}New questions are written by an AI provider you connect, from excerpts of your materials, then checked by Klierly before they are saved.</p>
-              <Link href="/settings#ai" className="btn mt-3">Connect an AI provider</Link>
+              <p className="notice"><strong>AI is not set up, so new question sets cannot be generated yet.</strong> {course.isSample ? "The sample course's ready-made questions work without it. " : ""}{ai.reason}</p>
+              <Link href="/settings#ai" className="btn mt-3">Connect your own AI provider</Link>
             </div>
           ) : !course.allowExternalAi ? (
             <p className="notice notice-warn mt-2">This course is set to keep its materials away from external AI providers. <Link className="link" href={`/courses/${course.id}/settings`}>Change it in course settings</Link> if your course rules allow it.</p>
+          ) : !ai.available ? (
+            <div className="mt-2">
+              <p className="notice notice-warn" data-testid="ai-limit">{ai.reason}</p>
+              {ai.kind === "managed" && <Link href="/settings#ai" className="btn mt-3">Connect your own AI provider</Link>}
+            </div>
           ) : (
             <ActionForm action={generateAction} className="mt-2">
               <input type="hidden" name="courseId" value={course.id} />
-              <p className="text-sm text-muted">Sends up to 6 short excerpts per topic to <strong>{new URL(provider.baseUrl).host}</strong> ({provider.model}). Drafts with a wrong calculation, a missing source or more than one correct answer are discarded. <span className="tnum">{used}/{provider.dailyRequestLimit}</span> requests used today.</p>
+              <p className="text-sm text-muted" data-testid="ai-usage">
+                {ai.kind === "managed" ? <><strong>{ai.label}</strong> is included — no key needed. </> : <>Using your own provider at <strong>{ai.host}</strong> ({ai.model}). </>}
+                Up to 6 short excerpts per topic are sent to {ai.kind === "managed" ? <>Klierly&apos;s AI provider ({ai.host})</> : "it"}. Drafts with a wrong calculation, a missing source or more than one correct answer are discarded.{" "}
+                <span className="tnum">{ai.usedToday} of {ai.dailyLimit}</span> {ai.kind === "managed" ? "free requests" : "requests"} used today{ai.kind === "managed" && <>, <span className="tnum">{Math.round((ai.tokensThisMonth / Math.max(1, ai.monthlyTokenLimit)) * 100)}%</span> of this month&apos;s allowance</>}.
+              </p>
               <fieldset className="mt-3">
                 <legend className="label">Topics <span className="font-normal text-muted">(up to 8; number = questions already in the bank)</span></legend>
                 <div className="grid gap-x-4 gap-y-1 text-sm sm:grid-cols-2">

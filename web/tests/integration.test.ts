@@ -13,7 +13,7 @@ import { chunksForTopic, searchChunks } from "@/lib/retrieval";
 import { finishSession, getHint, getSessionView, reportQuestion, startSession, submitAnswer, tagError } from "@/lib/practice/service";
 import { getPlan, savePlan } from "@/lib/plan/service";
 import { generateLearnNote, generateQuestions } from "@/lib/ai/generate";
-import { AiError } from "@/lib/ai/provider";
+import { AiError, aiStatus } from "@/lib/ai/provider";
 import { expandCitations } from "@/lib/citations";
 import { addDays, today } from "@/lib/dates";
 import { resetRateLimits } from "@/lib/ratelimit";
@@ -396,6 +396,98 @@ describe("AI generation (mock OpenAI-compatible provider)", () => {
     expect(after.some((q) => q.citations.some((c) => c.documentId === doc.id))).toBe(false);
     expect(after.every((q) => q.citations.length > 0)).toBe(true);
     expect(after.length).toBeLessThan(before.length);
+  });
+});
+
+describe("managed AI (no key needed)", () => {
+  const SECRET = "managed-secret-key-never-shown";
+  let courseId: string; let topicIds: string[];
+  const configure = (over: Record<string, string> = {}) => Object.assign(process.env, {
+    MANAGED_AI_BASE_URL: `http://127.0.0.1:${LLM_PORT}/v1`, MANAGED_AI_API_KEY: MOCK_KEY, MANAGED_AI_MODEL: "mock-cheap", MANAGED_AI_MODEL_STRONG: "mock-strong",
+    MANAGED_AI_USER_DAILY_REQUESTS: "40", MANAGED_AI_USER_MONTHLY_TOKENS: "400000", MANAGED_AI_GLOBAL_DAILY_REQUESTS: "500", MANAGED_AI_GLOBAL_MONTHLY_USD: "10",
+    MANAGED_AI_PRICE_IN_PER_MTOK: "0.5", MANAGED_AI_PRICE_OUT_PER_MTOK: "2", MANAGED_AI_STRONG_PRICE_IN_PER_MTOK: "5", MANAGED_AI_STRONG_PRICE_OUT_PER_MTOK: "20", ...over });
+  const usage = () => db.select().from(schema.aiUsage).where(eq(schema.aiUsage.userId, bob.id));
+
+  beforeAll(async () => {
+    const course = await makeCourse(bob.id, "Bob's managed course");
+    courseId = course.id;
+    for (const f of ["module1-simple-regression.pdf", "module4-forecasting.md"]) await waitForDocument((await upload(bob.id, courseId, f)).documentId);
+    await resolveProposals(bob.id, courseId, "all", "accept");
+    topicIds = (await topicStates(bob.id, courseId)).map((t) => t.id);
+    resetRateLimits();
+  }, 60_000);
+  afterAll(() => { for (const k of Object.keys(process.env)) if (k.startsWith("MANAGED_AI_")) delete process.env[k]; });
+
+  it("is off unless the operator configured it, and says so", async () => {
+    expect(await aiStatus(bob.id)).toMatchObject({ available: false, kind: null });
+    process.env.MANAGED_AI_BASE_URL = "http://127.0.0.1:1/v1"; // incomplete configuration stays off
+    expect((await aiStatus(bob.id)).kind).toBeNull();
+    await expect(generateQuestions({ userId: bob.id, courseId, topicIds: topicIds.slice(0, 1), perTopic: 1 })).rejects.toMatchObject({ code: "no_provider" });
+  });
+
+  it("generates without any user key, accounts requests, tokens and cost, and uses the stronger model only for retries", async () => {
+    configure();
+    const status = await aiStatus(bob.id);
+    expect(status).toMatchObject({ available: true, kind: "managed", label: "Klierly AI", usedToday: 0, dailyLimit: 40 });
+    expect(JSON.stringify(status)).not.toContain(MOCK_KEY); // what the UI receives carries no credential
+    const results = await generateQuestions({ userId: bob.id, courseId, topicIds: topicIds.slice(0, 2), perTopic: 3 });
+    expect(results.reduce((n, r) => n + r.added, 0)).toBeGreaterThanOrEqual(5);
+    const rows = await usage();
+    expect(rows.every((r) => r.provider === "managed" && r.ok)).toBe(true);
+    const routine = rows.filter((r) => r.tier === "routine"), strong = rows.filter((r) => r.tier === "strong");
+    expect(routine.length).toBe(2); // one first attempt per topic on the inexpensive model
+    expect(routine.every((r) => r.model === "mock-cheap")).toBe(true);
+    expect(strong.length).toBeGreaterThanOrEqual(1); // the mock's first reply contains invalid drafts → retry
+    expect(strong.every((r) => r.model === "mock-strong")).toBe(true);
+    for (const r of rows) {
+      const price = r.tier === "strong" ? { in: 5, out: 20 } : { in: 0.5, out: 2 };
+      expect(r.costMicroUsd).toBe(Math.round(r.promptTokens! * price.in + r.completionTokens! * price.out));
+      expect(r.costMicroUsd).toBeGreaterThan(0);
+    }
+    const after = await aiStatus(bob.id);
+    expect(after).toMatchObject({ kind: "managed", usedToday: rows.length });
+    if (after.kind === "managed") expect(after.tokensThisMonth).toBe(rows.reduce((n, r) => n + r.promptTokens! + r.completionTokens!, 0));
+    const [stored] = await db.select().from(schema.providerSettings).where(eq(schema.providerSettings.userId, bob.id));
+    expect(stored).toBeUndefined(); // the managed key is never copied into a user's settings
+  }, 60_000);
+
+  it("enforces the per-student daily quota, monthly allowance, shared daily cap and budget stop", async () => {
+    const used = (await usage()).length;
+    const blocked = async (over: Record<string, string>, pattern: RegExp) => {
+      configure(over);
+      const st = await aiStatus(bob.id);
+      expect(st.available).toBe(false);
+      expect(st.reason).toMatch(pattern);
+      await expect(generateQuestions({ userId: bob.id, courseId, topicIds: topicIds.slice(2, 3), perTopic: 1 })).rejects.toMatchObject({ code: "limit_reached" });
+    };
+    await blocked({ MANAGED_AI_USER_DAILY_REQUESTS: String(used) }, /today's \d+ free AI requests/);
+    await blocked({ MANAGED_AI_USER_MONTHLY_TOKENS: "100" }, /this month's free AI allowance/);
+    await blocked({ MANAGED_AI_GLOBAL_DAILY_REQUESTS: "1" }, /shared free AI allowance for today/);
+    await blocked({ MANAGED_AI_GLOBAL_MONTHLY_USD: "0.000001" }, /shared free AI budget/);
+    expect((await usage()).length).toBe(used); // refused requests never reached the provider
+    configure();
+    expect((await aiStatus(bob.id)).available).toBe(true);
+  });
+
+  it("counts failed provider calls against the quota and reports them honestly", async () => {
+    configure({ MANAGED_AI_API_KEY: SECRET }); // the mock rejects this key
+    const before = (await usage()).length;
+    await expect(generateQuestions({ userId: bob.id, courseId, topicIds: topicIds.slice(2, 3), perTopic: 1 })).rejects.toMatchObject({ code: "auth_failed" });
+    const rows = await usage();
+    expect(rows.length).toBe(before + 1);
+    expect(rows.filter((r) => !r.ok)).toHaveLength(1);
+    configure();
+  });
+
+  it("a student's own key takes precedence over the managed provider", async () => {
+    await db.insert(schema.providerSettings).values({ userId: bob.id, baseUrl: `http://127.0.0.1:${LLM_PORT}/v1`, model: "mock-1", apiKeyEnc: encryptSecret(MOCK_KEY), keyHint: "…-key", dailyRequestLimit: 60, disclosureAckAt: new Date() });
+    resetRateLimits();
+    expect(await aiStatus(bob.id)).toMatchObject({ kind: "byok", available: true, model: "mock-1" });
+    const managedBefore = (await usage()).filter((r) => r.provider === "managed").length;
+    await generateLearnNote({ userId: bob.id, courseId, topicId: topicIds[0] });
+    const rows = await usage();
+    expect(rows.filter((r) => r.provider === "managed").length).toBe(managedBefore);
+    expect(rows.filter((r) => r.provider === "byok" && r.costMicroUsd === 0).length).toBe(1);
   });
 });
 

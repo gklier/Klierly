@@ -6,7 +6,7 @@ import { generateNoteAction, startPractice } from "@/app/actions/practice";
 import { CitationList } from "@/components/citations";
 import { ActionForm, Submit } from "@/components/forms";
 import { Icon } from "@/components/icons";
-import { getProvider } from "@/lib/ai/provider";
+import { aiStatus } from "@/lib/ai/provider";
 import { requireUser } from "@/lib/auth";
 import { expandCitations } from "@/lib/citations";
 import { getCourse } from "@/lib/courses";
@@ -21,10 +21,10 @@ export default async function LearnPage({ params }: { params: Promise<{ courseId
   if (!/^[0-9a-f-]{36}$/.test(topicId)) notFound();
   const [topic] = await db.select().from(schema.topics).where(and(eq(schema.topics.id, topicId), eq(schema.topics.courseId, course.id), eq(schema.topics.userId, user.id))).limit(1);
   if (!topic) notFound();
-  const [[note], chunks, provider, questions] = await Promise.all([
+  const [[note], chunks, ai, questions] = await Promise.all([
     db.select().from(schema.learnNotes).where(eq(schema.learnNotes.topicId, topic.id)).limit(1),
     chunksForTopic({ userId: user.id, courseId: course.id, topicName: topic.name, moduleId: topic.moduleId, limit: 4 }),
-    getProvider(user.id),
+    aiStatus(user.id),
     db.select({ id: schema.questions.id }).from(schema.questions).where(and(eq(schema.questions.topicId, topic.id), eq(schema.questions.status, "active"))),
   ]);
   const cites = note ? await expandCitations(note.body.keyPoints.map((k) => k.citations)) : [];
@@ -51,16 +51,18 @@ export default async function LearnPage({ params }: { params: Promise<{ courseId
               </ol>
             </section>
           ) : (
-            <p className="notice mt-4">There is no study note for this topic yet. Below are the passages from your materials that match it most closely.{!provider && <> <strong>An AI key is required to generate a summarised note.</strong> <Link className="link" href="/settings#ai">Connect a provider</Link>.</>}</p>
+            <p className="notice mt-4">There is no study note for this topic yet. Below are the passages from your materials that match it most closely.{!ai.kind && <> <strong>AI is not set up, so a summarised note cannot be generated.</strong> <Link className="link" href="/settings#ai">Connect a provider</Link>.</>}</p>
           )}
 
-          {provider && course.allowExternalAi && chunks.length > 0 && (
+          {ai.kind && ai.available && course.allowExternalAi && chunks.length > 0 && (
             <ActionForm action={generateNoteAction} className="mt-5">
               <input type="hidden" name="courseId" value={course.id} /><input type="hidden" name="topicId" value={topic.id} />
               <Submit className="btn" pendingText="Writing from your sources…"><Icon name="spark" />{note ? "Regenerate the note with AI" : "Generate a study note with AI"}</Submit>
-              <p className="help">Sends up to 6 short excerpts to {new URL(provider.baseUrl).host}. Points that cannot be tied to a source are dropped.</p>
+              <p className="help">Sends up to 6 short excerpts to {ai.kind === "managed" ? `${ai.label} (${ai.host})` : ai.host}. Points that cannot be tied to a source are dropped.</p>
             </ActionForm>
           )}
+
+          {ai.kind && !ai.available && <p className="notice notice-warn mt-5">{ai.reason}</p>}
 
           {chunks.length > 0 && (
             <section className="mt-8" aria-labelledby="src-h">
