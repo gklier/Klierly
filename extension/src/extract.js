@@ -229,6 +229,11 @@ export function extractVisibleText(options) {
     const block = !display.startsWith('inline') && display !== 'contents';
     const separator = PARAGRAPH.has(tag) ? '\n\n' : '\n';
     if (block) out.push(display === 'table-cell' ? ' ' : separator);
+    // Keep the page's own structure as light Markdown so headings stay headings
+    // and list items stay list items after import (wording is unchanged).
+    const heading = /^H([1-6])$/.exec(tag);
+    if (heading) out.push(`${'#'.repeat(Math.min(3, Number(heading[1])))} `);
+    else if (tag === 'LI') out.push('- ');
 
     let children = el.childNodes;
     if (el.shadowRoot) children = el.shadowRoot.childNodes;
@@ -243,6 +248,10 @@ export function extractVisibleText(options) {
     // Prefer the page's single main landmark when it holds real content.
     const mains = document.querySelectorAll('main, [role="main"]');
     if (mains.length === 1 && (mains[0].innerText || '').trim().length >= 200) root = mains[0];
+    // On LMS content pages, the authored body sits in a known container; starting
+    // there leaves out page furniture such as "View All Pages" or "Edit" buttons.
+    const body = document.querySelector('#wiki_page_show .show-content, .show-content.user_content, #course_syllabus');
+    if (body && (body.innerText || '').trim().length >= 40) root = body;
   }
   if (root) {
     const rootStyle = getComputedStyle(root);

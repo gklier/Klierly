@@ -100,6 +100,9 @@ export function startMockCanvas(port: number): Promise<MockCanvas> {
     if (itemMatch && TARGETS[Number(itemMatch[1])]) return res.writeHead(302, { Location: TARGETS[Number(itemMatch[1])] }).end();
     if (p === `${C}/pages/module-1-overview`) return html(wikiPage("Module 1 overview", "<h2>What this module covers</h2><p>Synthetic mock course page for Klierly tests; not real course content.</p><p>The slope b1 is the estimated change in the average response for a one-unit increase in x. A residual is the observed value minus the predicted value.</p><div style='display:none'>MOCK-HIDDEN-ANSWER-KEY</div>"));
     if (p === `${C}/pages/module-2-overview`) return html(wikiPage("Module 2 overview", `<h2>Partial slopes</h2><p>Synthetic mock course page for Klierly tests; not real course content.</p><p>Each coefficient in a multiple regression is a partial slope, holding the other predictors in the model fixed.</p>${state.version > 1 ? "<p>UPDATED-BY-INSTRUCTOR: adjusted R-squared increases only when a new predictor improves the fit by more than chance.</p>" : ""}`));
+    // A lecture page: one player on the page itself, one embedded from another site (the usual LMS arrangement).
+    if (p === `${C}/pages/lecture-21`) return html(wikiPage("Module 21 lecture", `<h2>Lecture video</h2><p>Synthetic mock lecture page for Klierly tests.</p><video controls width="320"><track kind="captions" srclang="en" label="English" src="${C}/media/lecture.vtt"></video><iframe src="http://127.0.0.1:${port + 1}/player" width="320" height="200" title="Embedded player"></iframe>`));
+    if (p === `${C}/media/lecture.vtt`) return res.writeHead(200, { "Content-Type": "text/vtt" }).end(fs.readFileSync(path.join(SAMPLE, "lecture-module2.vtt")));
     const fileMatch = /^\/courses\/77\/files\/(\d+)(\/download)?$/.exec(p);
     if (fileMatch && FILES[Number(fileMatch[1])]) {
       const f = FILES[Number(fileMatch[1])];
@@ -111,5 +114,11 @@ export function startMockCanvas(port: number): Promise<MockCanvas> {
     if (p === `${C}/quizzes/7`) return html(shell("Quiz 1", "<h1>Quiz 1</h1><form id='submit_quiz_form'><div class='question'><input type='radio' name='q1'> MOCK-QUIZ-CONTENT</div><button>Submit Quiz</button></form>"));
     html(shell("Not found", "<h1>Page not found</h1>"), 404);
   });
-  return new Promise((resolve) => server.listen(port, "127.0.0.1", () => resolve({ server, requests, state })));
+  // A separate "video platform" origin, like the third-party players course sites embed.
+  const player = http.createServer((req, res) => {
+    if (req.url === "/captions.vtt") return res.writeHead(200, { "Content-Type": "text/vtt" }).end("WEBVTT\n\n00:00:01.000 --> 00:00:05.000\nEMBEDDED-PLAYER-CAPTION the Wilcoxon rank-sum test compares two independent groups using ranks.\n\n00:00:05.000 --> 00:00:09.500\nThe Kruskal-Wallis test extends the idea to three or more groups.\n");
+    res.writeHead(200, { "Content-Type": "text/html; charset=utf-8" }).end(`<!doctype html><html><head><title>Mock player</title></head><body><video controls><track kind="subtitles" srclang="en" label="English (auto)" src="/captions.vtt"></video></body></html>`);
+  });
+  server.on("close", () => player.close());
+  return new Promise((resolve) => player.listen(port + 1, "127.0.0.1", () => server.listen(port, "127.0.0.1", () => resolve({ server, requests, state }))));
 }

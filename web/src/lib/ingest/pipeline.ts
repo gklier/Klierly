@@ -118,7 +118,7 @@ export async function processDocument(documentId: string): Promise<{ chunks: num
   const data = await readFile(doc.storagePath);
   const result = doc.kind === "file"
     ? await parseFile(doc.filename, data)
-    : await parseText(data.toString("utf8"), doc.filename.endsWith(".html") ? "html" : "plain", doc.title);
+    : await parseText(data.toString("utf8"), doc.filename.endsWith(".html") ? "html" : doc.filename.endsWith(".md") ? "markdown" : "plain", doc.title);
   const chunks = chunkSegments(result.segments);
   if (chunks.length === 0) throw new WorkerError(422, "empty_document", "No readable text was found in this document.");
 

@@ -34,6 +34,12 @@ export const learnSchema = z.object({
   keyPoints: z.array(z.object({ text: z.string().trim().min(5).max(700), citations: z.array(citationSchema).max(3).default([]) })).max(8).default([]),
 });
 
+export const topicsSchema = z.object({
+  insufficient: z.boolean().default(false),
+  reason: z.string().max(600).default(""),
+  topics: z.array(z.object({ name: z.string().trim().min(3).max(90), module: z.number().int().min(0).max(99).nullish(), sources: z.array(z.string().max(12)).max(8).default([]) })).max(20).default([]),
+});
+
 export type ValidQuestion = {
   type: "mcq" | "numeric"; stem: string; choices: string[] | null; correctIndex: number | null;
   numericValue: number | null; tolerance: number | null; unit: string | null; hint: string | null; explanation: string;

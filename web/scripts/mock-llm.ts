@@ -76,6 +76,18 @@ function learnNote(prompt: string) {
       { text: "[mock] An uncited claim that must be dropped.", citations: [{ source: "S42", quote: "nowhere" }] }] };
 }
 
+function topics(prompt: string) {
+  const pool = sentences(parseSources(prompt));
+  if (pool.length < 3) return { insufficient: true, reason: "Not enough material.", topics: [] };
+  const name = (s: string) => s.replace(/[^A-Za-z0-9\- ]/g, "").split(/\s+/).slice(0, 4).join(" ");
+  return { insufficient: false, reason: "", topics: [
+    ...pool.filter((_, i) => i % Math.max(1, Math.floor(pool.length / 5)) === 0).slice(0, 5).map((p) => ({ name: name(p.s), module: null, sources: [p.id] })),
+    { name: "Plan", module: null, sources: [pool[0].id] },                         // a bare label: must be dropped
+    { name: "Quantum blockchain zebras", module: null, sources: [pool[0].id] },    // not in the material: must be dropped
+    { name: name(pool[1].s) + " again", module: null, sources: ["S99"] },          // cites a source that was not provided: must be dropped
+  ] };
+}
+
 export function startMockLlm(port = 4010): Promise<http.Server> {
   const server = http.createServer((req, res) => {
     const send = (status: number, body: unknown) => { res.writeHead(status, { "Content-Type": "application/json" }); res.end(JSON.stringify(body)); };
@@ -94,6 +106,7 @@ export function startMockLlm(port = 4010): Promise<http.Server> {
       else if (body.model === "mock-insufficient" && system.includes("JSON")) content = JSON.stringify({ insufficient: true, reason: "The sources do not cover this topic.", questions: [], summary: "", keyPoints: [] });
       else if (system.includes("practice questions")) content = "```json\n" + JSON.stringify(questions(user)) + "\n```";
       else if (system.includes("study note")) content = JSON.stringify(learnNote(user));
+      else if (system.includes("study topics")) content = JSON.stringify(topics(user));
       else content = "ok";
       send(200, { id: "mock", object: "chat.completion", model: body.model, choices: [{ index: 0, message: { role: "assistant", content }, finish_reason: "stop" }],
         usage: { prompt_tokens: Math.ceil((system.length + user.length) / 4), completion_tokens: Math.ceil(content.length / 4) } });

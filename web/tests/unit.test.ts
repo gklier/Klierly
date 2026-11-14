@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { chunkSegments, splitText } from "@/lib/ingest/chunk";
-import { parseDateInLine, parseModulesCovered, proposeFromChunks, moduleNumberOf } from "@/lib/ingest/proposals";
+import { isTopicHeading, parseDateInLine, parseModulesCovered, proposeFromChunks, moduleNumberOf } from "@/lib/ingest/proposals";
 import { assessAssessment } from "@/lib/ingest/guard";
 import { evaluate, formatNumber } from "@/lib/calc";
 import { grade, mulberry32, nextMastery, parseNumericInput, pickByQuota, pickQuestions, readiness, type PoolQuestion, type TopicState } from "@/lib/practice/core";
@@ -66,6 +66,20 @@ describe("suggestions from materials", () => {
     ], { termYear: null });
     expect(drafts.map((d) => d.payload)).toEqual([{ kind: "topic", name: "Testing the slope", documentId: "d" }]);
     expect(proposeFromChunks({ id: "d", title: "n" }, [{ ordinal: 0, kind: "text", heading: null, text: "Plain text with no structure." }], { termYear: null })).toEqual([]);
+  });
+});
+
+describe("topic headings (from a real course report)", () => {
+  it("rejects file names, numbered steps and bare labels", () => {
+    for (const junk of ["Module 21 Notes.docx", "1. Plan", "3. Report", "Plan", "Ranks", "2. Do", "Step 2: Mechanics", "Part B", "Resources", "Overview", "View All Pages", "Learning Objectives", "Data sets", "slides.pptx", "Notes", "Example 3"]) {
+      expect(isTopicHeading(junk), junk).toBe(false);
+    }
+  });
+  it("keeps real subjects", () => {
+    for (const good of ["Two Way ANOVA with Interaction", "Wilcoxon Rank – Sum Test / Mann Whitney Statistic", "Kruskall Wallace Test", "Multicollinearity", "ANOVA", "Testing the slope", "1. Simple linear regression models", "Exponential smoothing"]) {
+      expect(isTopicHeading(good), good).toBe(true);
+    }
+    expect(isTopicHeading("Module 21 notes", "Module 21 Notes")).toBe(false); // the document's own title is not a topic
   });
 });
 

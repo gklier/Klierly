@@ -12,7 +12,7 @@ import { loadSampleCourse } from "@/lib/sample";
 import { chunksForTopic, searchChunks } from "@/lib/retrieval";
 import { finishSession, getHint, getSessionView, reportQuestion, startSession, submitAnswer, tagError } from "@/lib/practice/service";
 import { getPlan, savePlan } from "@/lib/plan/service";
-import { generateLearnNote, generateQuestions } from "@/lib/ai/generate";
+import { generateLearnNote, generateQuestions, proposeTopics } from "@/lib/ai/generate";
 import { AiError, aiStatus } from "@/lib/ai/provider";
 import { expandCitations } from "@/lib/citations";
 import { addDays, today } from "@/lib/dates";
@@ -478,6 +478,29 @@ describe("managed AI (no key needed)", () => {
     expect(rows.filter((r) => !r.ok)).toHaveLength(1);
     configure();
   });
+
+  it("suggests study topics for review, dropping labels, inventions and uncited ones; supersedes heading guesses", async () => {
+    const course = await makeCourse(bob.id, "Topic organiser");
+    await waitForDocument((await upload(bob.id, course.id, "module2-multiple-regression.docx")).documentId);
+    const before = await db.select().from(schema.proposals).where(and(eq(schema.proposals.courseId, course.id), eq(schema.proposals.kind, "topic")));
+    expect(before.length).toBeGreaterThan(0); // heading-based guesses exist
+    const r = await proposeTopics({ userId: bob.id, courseId: course.id });
+    expect(r).toMatchObject({ ok: true, dropped: 3 });
+    const after = await db.select().from(schema.proposals).where(and(eq(schema.proposals.courseId, course.id), eq(schema.proposals.kind, "topic")));
+    const pending = after.filter((p) => p.status === "pending");
+    expect(pending.length).toBe(r.ok ? r.proposed : -1);
+    expect(pending.length).toBeGreaterThanOrEqual(3);
+    expect(pending.every((p) => p.payload.kind === "topic" && p.payload.via === "ai" && p.evidenceChunkId)).toBe(true);
+    const names = pending.map((p) => (p.payload.kind === "topic" ? p.payload.name : ""));
+    expect(names).not.toContain("Plan");
+    expect(names.join(" ")).not.toMatch(/zebras|again/);
+    expect(before.every((b) => after.find((a) => a.id === b.id)!.status !== "pending" || pending.some((p) => p.id === b.id))).toBe(true);
+    expect(await db.select().from(schema.topics).where(eq(schema.topics.courseId, course.id))).toHaveLength(0); // nothing applied without review
+    await resolveProposals(bob.id, course.id, "all", "accept", ["topic"]);
+    const made = await topicStates(bob.id, course.id);
+    expect(made.length).toBe(pending.length);
+    expect(made.every((t) => t.hasSources)).toBe(true);
+  }, 60_000);
 
   it("a student's own key takes precedence over the managed provider", async () => {
     await db.insert(schema.providerSettings).values({ userId: bob.id, baseUrl: `http://127.0.0.1:${LLM_PORT}/v1`, model: "mock-1", apiKeyEnc: encryptSecret(MOCK_KEY), keyHint: "…-key", dailyRequestLimit: 60, disclosureAckAt: new Date() });

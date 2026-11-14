@@ -45,7 +45,7 @@ test.beforeAll(async ({ browser }) => {
   const der = publicKey.export({ type: "spki", format: "der" });
   extId = [...createHash("sha256").update(der).digest("hex").slice(0, 32)].map((c) => String.fromCharCode(97 + parseInt(c, 16))).join("");
   const manifest = JSON.parse(fs.readFileSync(path.join(copy, "manifest.json"), "utf8"));
-  fs.writeFileSync(path.join(copy, "manifest.json"), JSON.stringify({ ...manifest, key: der.toString("base64"), host_permissions: [`${LMS}/*`] }));
+  fs.writeFileSync(path.join(copy, "manifest.json"), JSON.stringify({ ...manifest, key: der.toString("base64"), host_permissions: [`${LMS}/*`, "http://127.0.0.1:3301/*"] }));
   ctx = await chromium.launchPersistentContext(path.join(tmp, "profile"), { channel: "chromium", headless: true, args: [`--disable-extensions-except=${copy}`, `--load-extension=${copy}`] });
   ctx.on("request", (r) => { if (/\/api\/ext\/import/.test(r.url()) && r.method() === "POST") imports.push(new URL(r.url()).pathname); });
 
@@ -206,6 +206,40 @@ test("stop and resume: finished items stay, the rest continues later", async () 
   await d.reload();
   await expect(d.locator("#resume")).toBeHidden(); // nothing left to resume
   await d.close();
+});
+
+test("lecture captions: text tracks on the page and inside an embedded player are imported with timestamps", async () => {
+  await lms.goto(`${LMS}/courses/77/pages/lecture-21`);
+  await expect(lms.getByRole("heading", { name: "Lecture video" })).toBeVisible();
+  const popup = await ctx.newPage();
+  await popup.goto(`chrome-extension://${extId}/popup.html?tabId=${await lmsTabId()}`);
+  await expect(popup.getByRole("link", { name: "Import its captions or transcript" })).toBeVisible();
+  await popup.close();
+
+  const before = imports.length;
+  const c = await ctx.newPage();
+  await c.goto(`chrome-extension://${extId}/captions.html?tabId=${await lmsTabId()}`);
+  await c.getByRole("button", { name: "Look for captions" }).click();
+  await expect(c.locator("#read-status")).toContainText("Found 2 caption sources.", { timeout: 20_000 });
+  await expect(c.locator("#found li").first()).toContainText("12 timed captions · from localhost:3300");
+  await expect(c.locator("#found li").nth(1)).toContainText("2 timed captions · from 127.0.0.1:3301");
+  await expect(c.locator("#found li").nth(1)).toContainText("EMBEDDED-PLAYER-CAPTION");
+  await expect(c.getByRole("button", { name: "Import captions" })).toBeDisabled();
+  expect(imports.length).toBe(before); // nothing sent before approval
+  await c.getByLabel("Title in Klierly").fill("Module 21 lecture");
+  await c.getByLabel(/I am allowed to use these captions/).check();
+  await c.getByRole("button", { name: "Import captions" }).click();
+  await expect(c.locator("#done")).toContainText("Imported 2.");
+  await c.close();
+
+  await app.goto(`/courses/${courseId}/materials`);
+  await expect(app.getByRole("link", { name: "Module 21 lecture — captions", exact: true })).toBeVisible();
+  await expect(app.getByText("VTT", { exact: true })).toHaveCount(2, { timeout: 20_000 });
+  await app.getByLabel("Search your materials").fill("Kruskal-Wallis three groups");
+  await app.getByRole("button", { name: "Search" }).click();
+  await app.getByRole("link", { name: /Module 21 lecture — captions 2 · 0:01/ }).click(); // the citation carries the lecture timestamp
+  await expect(app.locator("li[aria-current=true]")).toContainText("The Kruskal-Wallis test extends the idea to three or more groups.");
+  await app.goto(`/courses/${courseId}/materials`);
 });
 
 test("server: inventory endpoint needs the pairing token and is scoped to the owner", async ({ request, browser }) => {

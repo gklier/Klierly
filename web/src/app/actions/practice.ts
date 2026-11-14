@@ -6,7 +6,7 @@ import { and, eq } from "drizzle-orm";
 import { db, schema } from "@/db";
 import type { AnswerResponse } from "@/db/schema";
 import type { ActionState } from "@/components/forms";
-import { generateLearnNote, generateQuestions } from "@/lib/ai/generate";
+import { generateLearnNote, generateQuestions, proposeTopics } from "@/lib/ai/generate";
 import { AiError } from "@/lib/ai/provider";
 import { requireUser } from "@/lib/auth";
 import { ownsCourse } from "@/lib/courses";
@@ -149,6 +149,21 @@ export async function fillBlueprint(_: ActionState, fd: FormData): Promise<Actio
     return added ? { ok: parts.join(" ") } : { error: parts.join(" ") };
   } catch (e) {
     revalidatePath(`/courses/${courseId}`, "layout");
+    return { error: aiMessage(e) };
+  }
+}
+
+/** Suggest study topics with AI. Suggestions wait on the Materials page for the student to accept or dismiss. */
+export async function organizeTopicsAction(_: ActionState, fd: FormData): Promise<ActionState> {
+  const user = await requireUser();
+  const courseId = String(fd.get("courseId") ?? "");
+  if (!(await ownsCourse(user.id, courseId))) return { error: "That course was not found." };
+  try {
+    const r = await proposeTopics({ userId: user.id, courseId });
+    revalidatePath(`/courses/${courseId}`, "layout");
+    if (!r.ok) return { error: r.reason };
+    return { ok: `${r.proposed} ${r.proposed === 1 ? "topic" : "topics"} suggested${r.dropped ? ` (${r.dropped} discarded: duplicates, labels, or not found in your material)` : ""}. Review them under “Suggestions from your materials” above.` };
+  } catch (e) {
     return { error: aiMessage(e) };
   }
 }

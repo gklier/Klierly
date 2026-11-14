@@ -96,3 +96,25 @@ Topic: ${opts.topicName.replace(/[<>]/g, "")}
 ${opts.sources}
 </sources>`;
 }
+
+export const topicSystemPrompt = `You organise a university student's own course material into study topics.
+
+${GUARD}
+
+A good topic is a concept or method the student could be examined on (for example "Wilcoxon rank-sum test" or "Interpreting interaction terms"). Not topics: file names, document titles, section labels such as "Overview", "Resources", "Plan", "Report" or "Step 2", and administrative items.
+Merge duplicates and near-duplicates. Use the wording of the sources; do not add subjects the sources do not cover. If learning objectives are present, let them guide the list.
+
+Return ONE JSON object and nothing else:
+{
+  "insufficient": boolean,
+  "reason": string,
+  "topics": [ { "name": string, "module": number | null, "sources": ["S1", "S4"] } ]   // 3-12 topics; name 2-8 words; "module" = the module number the material names for it, if any; sources = 1-4 labels that cover it
+}`;
+
+export function topicUserPrompt(opts: { courseName: string; existing: string[]; sources: string }): string {
+  return `Course: ${opts.courseName.replace(/[<>]/g, "")}
+${opts.existing.length ? `Topics the student already has (do not repeat them):\n${opts.existing.map((t) => `- ${t.slice(0, 100)}`).join("\n")}\n` : ""}
+<sources>
+${opts.sources}
+</sources>`;
+}

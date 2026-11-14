@@ -291,7 +291,11 @@ test("10b. exam blueprint: topic weights from the materials, gaps filled, exam b
   await expect(page.getByRole("timer")).toBeVisible();
   const n = Number(/of (\d+)/.exec(await page.getByText(/^Question 1 of \d+/).innerText())![1]);
   expect(n).toBeGreaterThanOrEqual(8);
-  for (let i = 0; i < 3; i++) { await answerCurrent(page); await page.getByTestId("primary").click(); }
+  for (let i = 0; i < 3; i++) {
+    await answerCurrent(page);
+    await page.getByTestId("primary").click();
+    await expect(page.getByText(new RegExp(`^Question ${i + 2} of`))).toBeVisible(); // wait for the next question before answering it
+  }
   await page.getByRole("button", { name: "Submit exam" }).click();
   await page.getByTestId("confirm-submit").click();
   await expect(page.getByRole("heading", { name: "Mock exam results" })).toBeVisible();

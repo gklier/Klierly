@@ -1,11 +1,12 @@
-import { and, desc, eq, inArray } from "drizzle-orm";
+import { and, asc, desc, eq, inArray, sql } from "drizzle-orm";
 import { db, schema } from "@/db";
 import type { LearnNoteBody } from "@/db/schema";
-import { chunksForTopic } from "@/lib/retrieval";
+import { chunksForTopic, toOrQuery, type RetrievedChunk } from "@/lib/retrieval";
+import { isTopicHeading } from "@/lib/ingest/proposals";
 import { compute, numericFunctions } from "@/lib/worker";
 import { AiError, chatJson } from "./provider";
-import { learnSystemPrompt, learnUserPrompt, questionSystemPrompt, questionUserPrompt, renderSources } from "./prompt";
-import { generationSchema, isDuplicate, learnSchema, resolveCitations, shuffleChoices, validateQuestion } from "./validate";
+import { learnSystemPrompt, learnUserPrompt, questionSystemPrompt, questionUserPrompt, renderSources, topicSystemPrompt, topicUserPrompt } from "./prompt";
+import { generationSchema, isDuplicate, learnSchema, resolveCitations, shuffleChoices, topicsSchema, validateQuestion } from "./validate";
 
 export type TopicResult = { topicId: string; topicName: string; added: number; rejected: string[]; insufficient: string | null; /** Set when generation had to stop here (limit reached, provider error). Earlier topics keep their questions. */ stopped?: string };
 
@@ -108,4 +109,62 @@ export async function generateLearnNote(opts: { userId: string; courseId: string
   await db.insert(schema.learnNotes).values({ userId: opts.userId, courseId: opts.courseId, topicId: topic.id, body, origin: "ai" })
     .onConflictDoUpdate({ target: schema.learnNotes.topicId, set: { body, origin: "ai", createdAt: new Date() } });
   return { ok: true };
+}
+
+const normTopic = (t: string) => t.toLowerCase().replace(/[^a-z0-9]+/g, " ").trim();
+
+/**
+ * Ask the AI to organise the course's material into study topics. One small
+ * request: a spread of short excerpts (with their headings) from every
+ * document. Results are stored as suggestions for the student to review —
+ * nothing is applied automatically — and each must point at a provided
+ * excerpt and be findable in the material, or it is dropped.
+ */
+export async function proposeTopics(opts: { userId: string; courseId: string }): Promise<{ ok: true; proposed: number; dropped: number } | { ok: false; reason: string }> {
+  const course = await loadCourse(opts.userId, opts.courseId);
+  const rows = await db.select({
+    id: schema.sourceChunks.id, documentId: schema.sourceChunks.documentId, ordinal: schema.sourceChunks.ordinal, kind: schema.sourceChunks.kind, text: schema.sourceChunks.text,
+    heading: schema.sourceChunks.heading, page: schema.sourceChunks.page, slide: schema.sourceChunks.slide, tStartMs: schema.sourceChunks.tStartMs, tEndMs: schema.sourceChunks.tEndMs,
+    documentTitle: schema.sourceDocuments.title, moduleId: schema.sourceDocuments.moduleId,
+  }).from(schema.sourceChunks).innerJoin(schema.sourceDocuments, eq(schema.sourceDocuments.id, schema.sourceChunks.documentId))
+    .where(and(eq(schema.sourceChunks.courseId, opts.courseId), eq(schema.sourceChunks.userId, opts.userId), eq(schema.sourceDocuments.status, "ready"), eq(schema.sourceChunks.kind, "text")))
+    .orderBy(asc(schema.sourceChunks.documentId), asc(schema.sourceChunks.ordinal));
+  if (!rows.length) return { ok: false, reason: "Import some material first." };
+  // An even spread across the course, at most 36 excerpts of 320 characters: enough to see the subjects, cheap to send.
+  const step = Math.max(1, Math.ceil(rows.length / 36));
+  const sample: RetrievedChunk[] = rows.filter((_, i) => i % step === 0).slice(0, 36)
+    .map((r) => ({ ...r, text: `${r.heading ? `[${r.heading}] ` : ""}${r.text}`.slice(0, 320), rank: 0 }));
+  const existing = (await db.select({ name: schema.topics.name }).from(schema.topics).where(eq(schema.topics.courseId, opts.courseId))).map((t) => t.name);
+  const out = await chatJson(opts.userId, "topics", topicSystemPrompt, topicUserPrompt({ courseName: course.name, existing, sources: renderSources(sample) }), { maxTokens: 1200 });
+  const parsed = topicsSchema.safeParse(out);
+  if (!parsed.success) throw new AiError("bad_output", "The AI returned topics in an unexpected format. Try again.");
+  if (parsed.data.insufficient && !parsed.data.topics.length) return { ok: false, reason: parsed.data.reason || "The material is too thin to suggest topics." };
+
+  const seen = new Set(existing.map(normTopic));
+  let proposed = 0, dropped = 0;
+  const accepted: { name: string; chunk: RetrievedChunk }[] = [];
+  for (const t of parsed.data.topics) {
+    const name = t.name.replace(/\s+/g, " ").trim();
+    const key = normTopic(name);
+    const cited = t.sources.map((s) => /^\[?S(\d{1,2})\]?$/i.exec(s.trim())).map((m) => (m ? sample[Number(m[1]) - 1] : undefined)).find(Boolean);
+    const q = toOrQuery(name);
+    const found = q ? await db.execute(sql`select 1 from source_chunks where course_id = ${opts.courseId} and user_id = ${opts.userId} and tsv @@ to_tsquery('english', ${q}) limit 1`) : null;
+    // Must be a real subject, new, tied to an excerpt that was actually provided, and present in the material.
+    if (!isTopicHeading(name) || seen.has(key) || !cited || !found?.rowCount) { dropped++; continue; }
+    seen.add(key);
+    accepted.push({ name, chunk: cited }); // its module comes from the cited document when the suggestion is accepted
+  }
+  if (!accepted.length) return { ok: false, reason: "The AI's suggestions could not be tied to your material, so none were kept." };
+  await db.transaction(async (tx) => {
+    // Heading-based guesses that were never accepted are superseded by this pass.
+    await tx.update(schema.proposals).set({ status: "dismissed" }).where(and(eq(schema.proposals.courseId, opts.courseId), eq(schema.proposals.kind, "topic"), eq(schema.proposals.status, "pending")));
+    for (const a of accepted) {
+      const res = await tx.insert(schema.proposals).values({
+        userId: opts.userId, courseId: opts.courseId, kind: "topic", payload: { kind: "topic", name: a.name, documentId: a.chunk.documentId, via: "ai" },
+        dedupeKey: normTopic(a.name).slice(0, 200), evidenceChunkId: a.chunk.id, status: "pending",
+      }).onConflictDoUpdate({ target: [schema.proposals.courseId, schema.proposals.kind, schema.proposals.dedupeKey], set: { status: "pending", evidenceChunkId: a.chunk.id, payload: { kind: "topic", name: a.name, documentId: a.chunk.documentId, via: "ai" } } }).returning({ id: schema.proposals.id });
+      if (res.length) proposed++;
+    }
+  });
+  return { ok: true, proposed, dropped };
 }

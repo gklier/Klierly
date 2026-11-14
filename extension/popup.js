@@ -103,6 +103,15 @@ async function init() {
   await extract(signals.hasSelection);
   if (!capture) return;
 
+  // Lecture videos: captions are handled on their own page because embedded players need a per-site permission.
+  try {
+    const { listEmbeds } = await import('./src/captions.js');
+    const embeds = await run(listEmbeds);
+    if (embeds && (embeds.media > 0 || embeds.frames > 0)) {
+      $('captions-row').hidden = false;
+      $('captions-link').addEventListener('click', (e) => { e.preventDefault(); chrome.tabs.create({ url: chrome.runtime.getURL(`captions.html?tabId=${tab.id}`) }); window.close(); });
+    }
+  } catch { /* optional */ }
   $('selection-only').addEventListener('change', (e) => extract(e.target.checked));
   $('permission').addEventListener('change', updateImportState);
   $('course').addEventListener('change', () => { fillModules(); updateImportState(); });

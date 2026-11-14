@@ -7,6 +7,27 @@ const MODULE_RE = /^(?:#+\s*)?((?:Module|Week|Unit|Chapter)\s+(\d{1,2}))\s*[:.\-
 const OBJECTIVES_RE = /^(?:#+\s*)?(?:learning\s+)?(?:objectives|outcomes|goals)\s*:?\s*$/i;
 const BULLET_RE = /^\s*(?:[-*•–]|\d{1,2}[.)])\s+(.{8,300})$/;
 const GENERIC_HEADING = /^(introduction|intro|overview|summary|conclusion|references|schedule|grading|agenda|contents|table of contents|questions\??|learning objectives|objectives|modules|course description|example|examples|notes|worked example|appendix|recap|review|key points|key takeaways)\b/i;
+/** Headings that are structure or housekeeping, not something to study. */
+const NOT_A_TOPIC = new Set(["plan", "do", "report", "mechanics", "hypotheses", "hypothesis", "assumptions", "conclusion", "conclusions", "resources", "data", "ranks", "steps", "results", "output", "solution", "solutions",
+  "practice", "to do", "view all pages", "next steps", "instructions", "readings", "reading", "videos", "video", "lecture", "lectures", "slides", "homework", "announcements", "data sets", "datasets", "files", "links"]);
+const FILE_NAME = /\.(docx?|pptx?|xlsx?|pdf|csv|txt|jmp|zip|mp4|mov|html?)$/i;
+
+/** Is this heading worth offering as a study topic? Conservative: a missed topic can be added by hand, a junk one erodes trust. */
+export function isTopicHeading(raw: string, docTitle = ""): boolean {
+  const base = raw.replace(/\s*\(speaker notes\)$/i, "").trim();
+  const key = norm(base);
+  const words = key.split(" ").filter(Boolean);
+  if (base.length < 4 || base.length > 70 || words.length > 8 || !/[a-z]{3}/i.test(base)) return false;
+  if (FILE_NAME.test(base) || GENERIC_HEADING.test(base) || MODULE_RE.test(base) || key === norm(docTitle)) return false;
+  // "1. Plan", "Step 3: Report", "Part B" — numbered steps of a worked example or outline.
+  const unnumbered = key.replace(/^(step|part|section|example|question|problem)?\s*(\d+|[a-d])\b\s*/, "").trim();
+  if (!unnumbered || NOT_A_TOPIC.has(unnumbered) || NOT_A_TOPIC.has(key)) return false;
+  if (unnumbered !== key && unnumbered.split(" ").length <= 2) return false;
+  // One-word headings are usually labels ("Ranks", "Notes"); keep long terms and acronyms ("Multicollinearity", "ANOVA").
+  if (words.length === 1 && !(base.length >= 9 || /^[A-Z]{4,}$/.test(base))) return false;
+  return true;
+}
+
 const MONTHS = ["january", "february", "march", "april", "may", "june", "july", "august", "september", "october", "november", "december"];
 const MONTH_RE = "(jan(?:uary)?|feb(?:ruary)?|mar(?:ch)?|apr(?:il)?|may|jun(?:e)?|jul(?:y)?|aug(?:ust)?|sep(?:t(?:ember)?)?|oct(?:ober)?|nov(?:ember)?|dec(?:ember)?)";
 const DATE_TEXT_RE = new RegExp(`\\b${MONTH_RE}\\.?\\s+(\\d{1,2})(?:st|nd|rd|th)?(?:,?\\s+(\\d{4}))?\\b`, "i");
@@ -106,13 +127,12 @@ export function proposeFromChunks(doc: { id: string; title: string }, chunks: Ch
     }
 
     const h = c.heading?.trim();
-    if (!isSyllabus && h && topicCount < 14) {
+    if (!isSyllabus && h && topicCount < 10) {
       const base = h.replace(/\s*\(speaker notes\)$/i, "");
       const key = norm(base);
       if (!seenHeadings.has(key)) {
         seenHeadings.add(key);
-        const words = key.split(" ").length;
-        if (base.length >= 4 && base.length <= 70 && words <= 8 && !GENERIC_HEADING.test(base) && !MODULE_RE.test(base) && norm(doc.title) !== key && /[a-z]{3}/i.test(base)) {
+        if (isTopicHeading(base, doc.title)) {
           put({ kind: "topic", name: base.replace(/^worked example:\s*/i, "").replace(/^\w/, (ch) => ch.toUpperCase()), documentId: doc.id }, key, c.ordinal);
           topicCount++;
         }

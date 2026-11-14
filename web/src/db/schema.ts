@@ -130,7 +130,7 @@ export const importJobs = pgTable("import_jobs", {
 
 export type ProposalPayload =
   | { kind: "module"; name: string; number?: number }
-  | { kind: "topic"; name: string; documentId?: string }
+  | { kind: "topic"; name: string; documentId?: string; via?: "ai" }
   | { kind: "objective"; text: string; moduleNumber?: number }
   | { kind: "date"; label: string; date: string; dateKind: "exam" | "deadline"; modulesCovered?: number[]; yearAssumed?: boolean };
 

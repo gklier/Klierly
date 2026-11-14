@@ -8,5 +8,5 @@ const root = join(dirname(fileURLToPath(import.meta.url)), '..');
 mkdirSync(join(root, 'dist'), { recursive: true });
 const target = join(root, 'dist', 'klierly-extension.zip');
 rmSync(target, { force: true });
-execFileSync('zip', ['-r', '-X', target, 'manifest.json', 'popup.html', 'popup.js', 'options.html', 'options.js', 'discover.html', 'discover.js', 'ui.css', 'icons', 'src'], { cwd: root, stdio: 'inherit' });
+execFileSync('zip', ['-r', '-X', target, 'manifest.json', 'popup.html', 'popup.js', 'options.html', 'options.js', 'discover.html', 'discover.js', 'captions.html', 'captions.js', 'ui.css', 'icons', 'src'], { cwd: root, stdio: 'inherit' });
 console.log(`written ${target}`);

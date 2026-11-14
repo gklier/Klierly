@@ -4,6 +4,8 @@ import { db, schema } from "@/db";
 import type { ProposalPayload } from "@/db/schema";
 import { addModule, addTopic, deleteDocumentAction, deleteModule, deleteTopic, resolveProposalAction, retryDocumentAction, setDocumentModule, setTopicModule } from "@/app/actions/courses";
 import { ActionForm, ConfirmAction, Submit } from "@/components/forms";
+import { organizeTopicsAction } from "@/app/actions/practice";
+import { aiStatus } from "@/lib/ai/provider";
 import { Icon } from "@/components/icons";
 import { ImportPanel } from "@/components/import-panel";
 import { AutoSubmitSelect } from "@/components/auto-submit";
@@ -34,12 +36,13 @@ export default async function MaterialsPage({ params, searchParams }: { params: 
   const user = await requireUser();
   const course = await getCourse(user.id, (await params).courseId);
   const q = ((await searchParams).q ?? "").trim().slice(0, 200);
-  const [modules, docs, proposals, topics, objectives] = await Promise.all([
+  const [modules, docs, proposals, topics, objectives, ai] = await Promise.all([
     listModules(course.id),
     db.select().from(schema.sourceDocuments).where(eq(schema.sourceDocuments.courseId, course.id)).orderBy(desc(schema.sourceDocuments.createdAt)),
     db.select().from(schema.proposals).where(and(eq(schema.proposals.courseId, course.id), eq(schema.proposals.status, "pending"))).orderBy(asc(schema.proposals.createdAt)),
     topicStates(user.id, course.id),
     db.select().from(schema.learningObjectives).where(eq(schema.learningObjectives.courseId, course.id)).orderBy(asc(schema.learningObjectives.createdAt)),
+    aiStatus(user.id),
   ]);
   const evidenceIds = [...proposals.map((p) => p.evidenceChunkId), ...objectives.map((o) => o.evidenceChunkId)].filter((x): x is string => Boolean(x));
   const evidence = evidenceIds.length
@@ -85,7 +88,7 @@ export default async function MaterialsPage({ params, searchParams }: { params: 
           <ul className="mt-3 divide-y divide-line">
             {sortedProposals.map((p) => (
               <li key={p.id} className="flex flex-wrap items-center gap-x-3 gap-y-1 py-2.5">
-                <span className="badge w-36 justify-center">{PROPOSAL_LABEL[p.kind]}{p.payload.kind === "date" ? ` · ${p.payload.dateKind}` : ""}</span>
+                <span className="badge w-36 justify-center">{PROPOSAL_LABEL[p.kind]}{p.payload.kind === "date" ? ` · ${p.payload.dateKind}` : ""}{p.payload.kind === "topic" && p.payload.via === "ai" ? " · AI" : ""}</span>
                 <div className="min-w-0 flex-1 basis-64">
                   <p className="text-sm">{proposalText(p.payload)}{p.payload.kind === "date" && <span className="tnum text-muted"> → {formatDate(p.payload.date, { month: "short", day: "numeric", year: "numeric" })}</span>}</p>
                   <Evidence id={p.evidenceChunkId} />
@@ -209,6 +212,13 @@ export default async function MaterialsPage({ params, searchParams }: { params: 
                 </li>
               ))}
             </ul>
+          )}
+          {docs.some((d) => d.status === "ready") && ai.kind && ai.available && course.allowExternalAi && (
+            <ActionForm action={organizeTopicsAction} className="mt-3 border-t border-line pt-3">
+              <input type="hidden" name="courseId" value={course.id} />
+              <Submit className="btn" pendingText="Reading your material…"><Icon name="spark" />Suggest topics with AI</Submit>
+              <p className="help">Headings alone often make poor topics. This sends short excerpts from across your sources to {ai.kind === "managed" ? ai.label : ai.host} (one request) and proposes real subjects for you to accept or dismiss. Nothing is added without your review.</p>
+            </ActionForm>
           )}
           <ActionForm action={addTopic} className="mt-3" resetOnOk>
             <input type="hidden" name="courseId" value={course.id} />

@@ -31,7 +31,7 @@ export async function POST(req: Request) {
     return extError(req, 422, "assessment_blocked", `This page looks like an active assessment or a restricted page${check.reasons.length ? ` (${check.reasons.join("; ")})` : ""}. Klierly does not import those.`);
   }
   try {
-    const r = await createSource({ userId: user.id, courseId: body.courseId, moduleId: uuid(body.moduleId) ? body.moduleId : null, kind: "web", title, filename: "capture.txt", mime: "text/plain", data: Buffer.from(text, "utf8"), originUrl: url,
+    const r = await createSource({ userId: user.id, courseId: body.courseId, moduleId: uuid(body.moduleId) ? body.moduleId : null, kind: "web", title, filename: "capture.md", mime: "text/markdown", data: Buffer.from(text, "utf8"), originUrl: url,
       externalId: externalIdOf(body.externalId), moduleName: typeof body.moduleName === "string" ? body.moduleName : null });
     return NextResponse.json({ documentId: r.documentId, jobId: r.jobId, duplicate: r.duplicate, outcome: r.outcome, viewUrl: `${env.appUrl}/courses/${body.courseId}/materials/${r.documentId}` }, { status: r.duplicate ? 200 : 201, headers: corsHeaders(req) });
   } catch (e) {
