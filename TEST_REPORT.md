@@ -60,6 +60,14 @@ sources already in your account keep the topics they got; delete them and re-imp
 | Every network call site in the extension is pinned | A test fixes the number of `fetch(` calls per file (api 1, Canvas adapter 1, captions 2). |
 | Google AI Studio and NaviGator presets | E2E: each fills its own address (and NaviGator's example model), replaces the other's, never touches the key, and Google's free-versus-paid warning is on the page. |
 
+## CI results for this round (pull request #1)
+
+All jobs passed on a clean runner for the commit that added Mediasite, Docker and the Oracle guide: worker, extension, web (types, lint, audit, integration, end-to-end), no-secrets, **Docker build and start (x86_64)**, and, when started by hand, **Docker build and start on linux/arm64 (emulated)**. The same commit's pull-request run failed once and passed once on identical code: that was the hydration issue below.
+
+## Open defect found by CI: intermittent React hydration error
+
+CI caught the previously unexplained one-in-many failure: `Minified React error #418` on the Materials page of the production build. It is real (reproducible at roughly one load in sixty with the script in `web/scripts/repro-hydration.mjs`), the page recovers and renders identically, and **its cause is not found.** Ruled out by measurement: the polling refresh, streamed metadata, late-streamed content. Details, numbers and how the test suite now treats it are in `docs/KNOWN_ISSUES.md`. A run that prints `KNOWN ISSUE` is passed-with-a-defect, not clean.
+
 ## Not verified — read this before relying on anything
 
 1. **Real Canvas (UF or any).** Discovery, file download and caption reading have only met a
@@ -75,7 +83,7 @@ sources already in your account keep the topics they got; delete them and re-imp
    Question *quality* on real statistics material is unknown; the checks guarantee structure,
    sources and arithmetic only.
 4. **Institutional permission** to use the extension on a university course site: not checked with UF.
-5. **Oracle / Arm.** Docker *is* now verified on x86_64 (see below). Arm is not: see the CI result noted below. The server scripts and the public HTTPS overlay were never run on a real Oracle machine.
+5. **Real Oracle hardware.** Docker is verified on x86_64, and the images build and start on linux/arm64 *under emulation* in GitHub Actions (passed 2026-11-14). That is not Oracle's machine. The server scripts and the public HTTPS overlay were never run on one.
 6. **Video platforms.** Only standard HTML text tracks and visible transcript panels are read.
    Whether QMB 3250's player exposes either is unknown.
 7. Edge and Firefox untested. No screen-reader or load testing.

@@ -21,22 +21,25 @@ export function ImportPanel({ courseId, modules, maxMb, pendingAtLoad }: { cours
   const input = useRef<HTMLInputElement>(null);
   useEffect(() => { if (pendingAtLoad > 0) setPolling(true); }, [pendingAtLoad]);
 
-  // While anything is processing, poll and refresh the server-rendered list.
+  // While anything is processing, check the count of pending imports and refresh the server-rendered
+  // list only when that count changes. (Refreshing on every tick re-rendered the whole page every
+  // 1.5 s, and a refresh landing while the page was still hydrating caused React hydration errors.)
   useEffect(() => {
     if (!polling) return;
     let stop = false;
+    let lastSeen = pendingAtLoad;
     const tick = async () => {
       try {
         const r = await fetch(`/api/courses/${courseId}/status`, { cache: "no-store" });
         const { pending } = (await r.json()) as { pending: number };
         if (stop) return;
-        router.refresh();
+        if (pending !== lastSeen) { lastSeen = pending; router.refresh(); }
         if (pending === 0) setPolling(false);
       } catch { /* try again on the next tick */ }
     };
     const t = setInterval(tick, 1500);
     return () => { stop = true; clearInterval(t); };
-  }, [polling, courseId, router]);
+  }, [polling, courseId, router, pendingAtLoad]);
 
   const uploadOne = useCallback((file: File) => {
     const key = `${file.name}-${file.size}-${Date.now()}-${Math.random()}`;

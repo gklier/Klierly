@@ -54,7 +54,7 @@ No feature flags are needed yet: unfinished features have no code paths or UI.
 5. **Product quality**: evaluate generated questions with a real model on real courses — the checks
    guarantee structure, sources and arithmetic, not pedagogy; conceptual MCQ keys remain
    "not independently verified" and are labelled so.
-6. **Framework**: move from Next.js 15 to 16.
+6. **Framework**: move from Next.js 15 to 16, and re-test the intermittent hydration error in `docs/KNOWN_ISSUES.md` there.
 
 ## Launch risks (rough)
 

@@ -6,12 +6,12 @@ on your behalf: you do each step below in your own Oracle account.**
 
 ## What was and was not verified
 
-| Verified here (x86_64 Linux sandbox) | Not verified |
+| Verified (x86_64 sandbox, and CI) | Not verified |
 | --- | --- |
-| The repo's Dockerfiles and `docker-compose.yml` build and run: database, worker and web all healthy; sample course imported by the containerised worker; data survived a full stop and start; the web container runs as a non-root user; idle memory ≈ 260 MB total (web 143 MB, worker 82 MB, database 35 MB) | **Anything on ARM** (Oracle's free machines are Arm, not x86); `deploy/setup-vm.sh` on a real Oracle machine; the public HTTPS overlay (`docker-compose.prod.yml`) |
+| The repo's Dockerfiles and `docker-compose.yml` build and run: database, worker and web all healthy; sample course imported by the containerised worker; data survived a full stop and start; the web container runs as a non-root user; idle memory ≈ 260 MB total (web 143 MB, worker 82 MB, database 35 MB) | **Real Oracle hardware**; `deploy/setup-vm.sh` on a real Oracle machine; the public HTTPS overlay (`docker-compose.prod.yml`) |
 | Building the images found a real bug (a TypeScript Next.js config made `next start` try to install TypeScript at startup). Fixed. | |
 
-Expect to hit at least one snag on the first Arm build. If you do, copy the error text to me.
+**Arm:** GitHub Actions builds and starts the same stack for `linux/arm64` under emulation (manual or on `main`; it passed on 2026-11-14), which is real evidence the images work on Arm, but emulation is not Oracle's machine, and it is much slower than native. Expect a snag or two on the first real run; copy the error text to me.
 
 ## Oracle's free limits (read from Oracle's page on 2026-11-14; check it again when you sign up)
 
