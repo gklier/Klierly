@@ -136,8 +136,8 @@ test("the operator sees the class and the report, and Sam can take the summary d
   await page.goto(`/courses/${courseId}/library`);
   await page.getByTestId("shared-item").getByRole("button", { name: /Take down/ }).click();
   await page.getByRole("dialog").getByRole("button", { name: "Take down" }).click();
-  await page.reload();
-  await expect(page.getByTestId("shared-item")).toHaveCount(0);
+  // The action runs on the server; wait for its effect instead of assuming it already finished.
+  await expect(async () => { await page.reload(); await expect(page.getByTestId("shared-item")).toHaveCount(0, { timeout: 2000 }); }).toPass({ timeout: 15_000 });
   await people.rae.page.goto(`/courses/${people.rae.courseId}/library`);
   await expect(people.rae.page.getByTestId("shared-item")).toHaveCount(0);
 });
