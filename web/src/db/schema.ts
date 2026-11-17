@@ -1,6 +1,6 @@
 import { sql } from "drizzle-orm";
 import {
-  pgTable, uuid, text, timestamp, integer, boolean, jsonb, real, date, index, uniqueIndex, primaryKey, customType,
+  type AnyPgColumn, pgTable, uuid, text, timestamp, integer, boolean, jsonb, real, date, index, uniqueIndex, primaryKey, customType,
 } from "drizzle-orm/pg-core";
 
 const tsvector = customType<{ data: string }>({ dataType: () => "tsvector" });
@@ -41,6 +41,8 @@ export const courses = pgTable("courses", {
   allowExternalAi: boolean("allow_external_ai").notNull().default(true),
   integrityNote: text("integrity_note"),
   isSample: boolean("is_sample").notNull().default(false),
+  /** The class (LMS course) this course is linked to, if the student linked it with the extension. */
+  classId: uuid("class_id").references((): AnyPgColumn => classSpaces.id, { onDelete: "set null" }),
   createdAt: createdAt(),
 }, (t) => [index("courses_user_idx").on(t.userId)]);
 
@@ -397,3 +399,64 @@ export const activityLog = pgTable("activity_log", {
   event: text("event").notNull(),
   details: jsonb("details").$type<Record<string, unknown>>().notNull().default({}),
 }, (t) => [index("activity_user_at_idx").on(t.userId, t.at)]);
+
+/** A class: one course shell in an LMS (for example Canvas course 123456 on a given host). */
+export const classSpaces = pgTable("class_spaces", {
+  id: id(),
+  lms: text("lms").notNull(),
+  host: text("host").notNull(),
+  externalCourseId: text("external_course_id").notNull(),
+  label: text("label").notNull(),
+  /** Operator switch: turn sharing off for a class (for example when an instructor asks). */
+  sharingEnabled: boolean("sharing_enabled").notNull().default(true),
+  createdAt: createdAt(),
+}, (t) => [uniqueIndex("class_spaces_ident_uq").on(t.lms, t.host, t.externalCourseId)]);
+
+/**
+ * Who has linked their course to a class. Membership is claimed through the extension while the student has the
+ * LMS course open. It is NOT verified with the LMS (no LMS API is used), so it is an honour system with friction,
+ * and everything shared must be safe to be seen by someone who is not really enrolled.
+ */
+export const classMembers = pgTable("class_members", {
+  userId: uuid("user_id").notNull().references(() => users.id, { onDelete: "cascade" }),
+  classId: uuid("class_id").notNull().references(() => classSpaces.id, { onDelete: "cascade" }),
+  joinedAt: timestamp("joined_at", { withTimezone: true }).notNull().defaultNow(),
+  verifiedAt: timestamp("verified_at", { withTimezone: true }).notNull().defaultNow(),
+}, (t) => [primaryKey({ columns: [t.userId, t.classId] })]);
+
+export type SummaryBody = { overview: string; points: { text: string; where: string | null }[] };
+
+/** A student's private AI summary of one of their sources, in their own words. */
+export const sourceSummaries = pgTable("source_summaries", {
+  id: id(),
+  userId: uuid("user_id").notNull().references(() => users.id, { onDelete: "cascade" }),
+  courseId: uuid("course_id").notNull().references(() => courses.id, { onDelete: "cascade" }),
+  documentId: uuid("document_id").notNull().references(() => sourceDocuments.id, { onDelete: "cascade" }),
+  body: jsonb("body").$type<SummaryBody>().notNull(),
+  model: text("model").notNull(),
+  createdAt: createdAt(),
+}, (t) => [uniqueIndex("source_summaries_doc_uq").on(t.documentId)]);
+
+/** A summary a student chose to share with their class: a copy, with no source text, quotes or file names. */
+export const sharedItems = pgTable("shared_items", {
+  id: id(),
+  classId: uuid("class_id").notNull().references(() => classSpaces.id, { onDelete: "cascade" }),
+  authorUserId: uuid("author_user_id").notNull().references(() => users.id, { onDelete: "cascade" }),
+  sourceSummaryId: uuid("source_summary_id").references(() => sourceSummaries.id, { onDelete: "cascade" }),
+  title: text("title").notNull(),
+  moduleName: text("module_name"),
+  body: jsonb("body").$type<SummaryBody>().notNull(),
+  aiGenerated: boolean("ai_generated").notNull().default(true),
+  termsVersion: text("terms_version").notNull(),
+  /** hidden = taken down automatically after reports, or by the operator, pending review. */
+  status: text("status").$type<"active" | "hidden">().notNull().default("active"),
+  createdAt: createdAt(),
+}, (t) => [index("shared_items_class_idx").on(t.classId, t.status)]);
+
+export const sharedReports = pgTable("shared_reports", {
+  id: id(),
+  itemId: uuid("item_id").notNull().references(() => sharedItems.id, { onDelete: "cascade" }),
+  reporterUserId: uuid("reporter_user_id").notNull().references(() => users.id, { onDelete: "cascade" }),
+  reason: text("reason").notNull(),
+  createdAt: createdAt(),
+}, (t) => [uniqueIndex("shared_reports_once_uq").on(t.itemId, t.reporterUserId)]);

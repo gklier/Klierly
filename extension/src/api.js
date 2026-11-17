@@ -110,6 +110,14 @@ export async function importCapture(settings, payload) {
   });
 }
 
+/**
+ * POST /api/ext/class — the student opened this Canvas course and chose to join its class library.
+ * Sends the course number, host and page title (the course name) plus the Klierly course to link. No page content.
+ */
+export async function joinClass(settings, payload) {
+  return request(settings, '/api/ext/class', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload) });
+}
+
 /** Only http(s) links are ever rendered as clickable. */
 export function safeHttpUrl(value) {
   try {

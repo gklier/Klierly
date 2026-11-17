@@ -11,6 +11,14 @@ SEGMENT_MS = 45_000
 _TS = r"(?:(\d{1,3}):)?(\d{1,2}):(\d{2})[.,](\d{1,3})"
 _CUE_RE = re.compile(rf"^\s*{_TS}\s*-->\s*{_TS}")
 _TAG_RE = re.compile(r"</?[A-Za-z][^>]*>|<\d{2}:\d{2}[^>]*>|\{\\[^}]*\}")
+# Automatic captions detach punctuation from its word: "p -value", "in -store", "negative 0 .286".
+_SPACED_HYPHEN = re.compile(r"(?<=[A-Za-z0-9]) -(?=[A-Za-z0-9])")
+_SPACED_DECIMAL = re.compile(r"(?<=\d) \.(?=\d)")
+
+
+def fix_caption_spacing(text: str) -> str:
+    """Rejoin hyphens and decimal points that speech recognition split from their words. Wording is not changed."""
+    return _SPACED_DECIMAL.sub(".", _SPACED_HYPHEN.sub("-", text))
 
 
 def _ms(h: str | None, m: str, s: str, frac: str) -> int:
@@ -27,7 +35,7 @@ def _parse_cues(text: str) -> list[tuple[int, int, str]]:
             if m:
                 g = m.groups()
                 start, end = _ms(*g[0:4]), _ms(*g[4:8])
-                body = clean_inline(_TAG_RE.sub("", " ".join(lines[idx + 1 :])))
+                body = fix_caption_spacing(clean_inline(_TAG_RE.sub("", " ".join(lines[idx + 1 :]))))
                 if body and end >= start:
                     cues.append((start, end, body))
                 break

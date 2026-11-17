@@ -1,6 +1,6 @@
 // Course discovery and import. Runs in its own extension tab so it survives
 // navigation in the course tab. Nothing is imported before "Import selected".
-import { ApiError, fetchCourses, fetchSources, importCapture, importFile, loadSettings, logEvent, normalizeServerUrl, safeHttpUrl } from './src/api.js';
+import { ApiError, fetchCourses, fetchSources, importCapture, importFile, joinClass, loadSettings, logEvent, normalizeServerUrl, safeHttpUrl } from './src/api.js';
 import { cleanText, cleanTitle, limitText } from './src/clean.js';
 import { collectSignals, extractVisibleText } from './src/extract.js';
 import { evaluateGuard } from './src/guard.js';
@@ -271,6 +271,19 @@ async function init() {
   });
   $('revoke').addEventListener('click', async (e) => { e.preventDefault(); await chrome.permissions.remove({ origins: [`${course.origin}/*`] }); location.reload(); });
   $('scan').addEventListener('click', scan);
+  $('class-terms-link').href = `${normalizeServerUrl(settings.serverUrl).url}/terms/sharing`;
+  $('class-terms').addEventListener('change', () => { $('class-join-btn').disabled = !$('class-terms').checked || !$('target').value; });
+  $('class-join-btn').addEventListener('click', async () => {
+    $('class-join-btn').disabled = true; $('class-status').textContent = 'Joining…';
+    try {
+      const title = await exec(() => document.title);
+      const res = await joinClass(settings, { lms: course.lms, host: course.host, externalCourseId: course.courseId, label: String(title || ''), courseId: $('target').value || null, termsAccepted: true });
+      $('class-status').textContent = `Joined “${res.label}”.${res.linked ? ' This Klierly course is now linked to it.' : ''}`;
+      logEvent(settings, 'class.join', { host: course.host, linked: Boolean(res.linked) }, $('target').value);
+    } catch (e) {
+      $('class-status').textContent = e instanceof ApiError ? e.message : 'Could not join the class library.';
+    } finally { $('class-join-btn').disabled = !$('class-terms').checked; }
+  });
   $('range-apply').addEventListener('click', () => {
     const [a, b] = [Number($('range-from').value), Number($('range-to').value)].sort((x, y) => x - y);
     for (const i of allItems()) if (i.importable && i.moduleIndex >= a && i.moduleIndex <= b) selected.add(i.key);

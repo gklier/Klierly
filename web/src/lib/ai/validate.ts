@@ -46,6 +46,13 @@ export const supplementSchema = z.object({
   verify: z.array(z.string().trim().min(5).max(260)).max(4).default([]),
 });
 
+export const summarySchema = z.object({
+  insufficient: z.boolean().default(false),
+  reason: z.string().max(600).default(""),
+  overview: z.string().trim().max(900).default(""),
+  points: z.array(z.object({ text: z.string().trim().min(15).max(700), source: z.string().max(12) })).max(14).default([]),
+});
+
 export type ValidQuestion = {
   type: "mcq" | "numeric"; stem: string; choices: string[] | null; correctIndex: number | null;
   numericValue: number | null; tolerance: number | null; unit: string | null; hint: string | null; explanation: string;

@@ -12,6 +12,10 @@ Phase 2: **managed AI** with quotas, cost accounting and operator page (mock-tes
 sync · **lecture captions** · structure-preserving capture · **AI topic suggestions** · **exam
 blueprint**, blueprint-weighted mock exam, targeted follow-up · **CI**.
 
+Phase 2, fourth round: **class library** (share AI summaries with classmates, class membership claimed
+through the extension, reports, operator moderation and per-class switch) · caption clean-up for
+automatic transcripts (JMP/"jump" search, spaced hyphens and decimals).
+
 ## Decisions waiting on the founder
 
 - **Sharing materials between students (crowdsourcing).** Not built. It reverses the original rule against shared repositories of course material, and the main risk is copyright and university policy, not code. See `docs/DECISIONS.md` for the reasoning and the narrow version that would be safe to build.

@@ -1,14 +1,15 @@
 import { and, asc, desc, eq, inArray, sql } from "drizzle-orm";
 import { db, schema } from "@/db";
-import type { LearnNoteBody } from "@/db/schema";
-import { chunksForTopic, toOrQuery, type RetrievedChunk } from "@/lib/retrieval";
+import type { LearnNoteBody, SummaryBody } from "@/db/schema";
+import { chunksForTopic, locationLabel, toOrQuery, type RetrievedChunk } from "@/lib/retrieval";
+import { hasVerbatimRun } from "@/lib/sharing-rules";
 import { isTopicHeading } from "@/lib/ingest/proposals";
 import { compute, numericFunctions } from "@/lib/worker";
 import { AiError, aiStatus, chatJson } from "./provider";
 import { env } from "@/lib/env";
 import { logActivity } from "@/lib/activity";
-import { supplementSystemPrompt, supplementUserPrompt, learnSystemPrompt, learnUserPrompt, questionSystemPrompt, questionUserPrompt, renderSources, topicSystemPrompt, topicUserPrompt } from "./prompt";
-import { supplementSchema, generationSchema, isDuplicate, learnSchema, resolveCitations, shuffleChoices, topicsSchema, validateQuestion } from "./validate";
+import { summarySystemPrompt, summaryUserPrompt, supplementSystemPrompt, supplementUserPrompt, learnSystemPrompt, learnUserPrompt, questionSystemPrompt, questionUserPrompt, renderSources, topicSystemPrompt, topicUserPrompt } from "./prompt";
+import { summarySchema, supplementSchema, generationSchema, isDuplicate, learnSchema, resolveCitations, shuffleChoices, topicsSchema, validateQuestion } from "./validate";
 
 export type TopicResult = { topicId: string; topicName: string; added: number; rejected: string[]; insufficient: string | null; /** Set when generation had to stop here (limit reached, provider error). Earlier topics keep their questions. */ stopped?: string };
 
@@ -204,5 +205,53 @@ export async function generateSupplement(opts: { userId: string; courseId: strin
   await db.insert(schema.learnSupplements).values({ userId: opts.userId, courseId: opts.courseId, topicId: topic.id, body: parsed.data, model })
     .onConflictDoUpdate({ target: schema.learnSupplements.topicId, set: { body: parsed.data, model, createdAt: new Date() } });
   await logActivity(opts.userId, "ai.supplement", { courseId: opts.courseId, details: { topic: topic.name, gaps: parsed.data.gaps.length } });
+  return { ok: true };
+}
+
+/**
+ * A study summary of one of the student's own sources, in the student's name and in the AI's own words.
+ * Stays private until the student chooses to share it. Points must cite a real excerpt (turned into a
+ * location label such as a lecture timestamp by the server, not by the model), and any point or overview
+ * that reuses a run of the source's own words is thrown away, so what can later be shared is a summary and
+ * not a copy.
+ */
+export async function generateSummary(opts: { userId: string; courseId: string; documentId: string }): Promise<{ ok: true } | { ok: false; reason: string }> {
+  const course = await loadCourse(opts.userId, opts.courseId);
+  const [doc] = await db.select().from(schema.sourceDocuments)
+    .where(and(eq(schema.sourceDocuments.id, opts.documentId), eq(schema.sourceDocuments.courseId, opts.courseId), eq(schema.sourceDocuments.userId, opts.userId))).limit(1);
+  if (!doc) throw new Error("Source not found.");
+  if (doc.status !== "ready") return { ok: false, reason: "This source has not finished processing yet." };
+  const rows = await db.select().from(schema.sourceChunks).where(eq(schema.sourceChunks.documentId, doc.id)).orderBy(asc(schema.sourceChunks.ordinal));
+  if (rows.length < 2) return { ok: false, reason: "This source is too short to summarise." };
+  const full = rows.map((r) => r.text);
+  const step = rows.length > 24 ? (rows.length - 1) / 23 : 1;
+  const picked = rows.length > 24 ? Array.from({ length: 24 }, (_, i) => rows[Math.round(i * step)]) : rows;
+  const sample: RetrievedChunk[] = picked.map((r) => ({
+    id: r.id, documentId: r.documentId, documentTitle: doc.title, moduleId: doc.moduleId, ordinal: r.ordinal, kind: r.kind, text: r.text.slice(0, 700),
+    heading: r.heading, page: r.page, slide: r.slide, tStartMs: r.tStartMs, tEndMs: r.tEndMs, rank: 0,
+  }));
+  const out = await chatJson(opts.userId, "summary", summarySystemPrompt, summaryUserPrompt({ courseName: course.name, title: doc.title, sources: renderSources(sample) }), { cache: true, maxTokens: 2200 });
+  const parsed = summarySchema.safeParse(out);
+  if (!parsed.success) throw new AiError("bad_output", "The AI returned the summary in an unexpected format. Try again.");
+  if (parsed.data.insufficient) return { ok: false, reason: parsed.data.reason || "The AI could not summarise this source." };
+
+  const overview = parsed.data.overview.trim();
+  if (overview.length < 20 || hasVerbatimRun(overview, full)) throw new AiError("bad_output", "The AI's overview copied the source too closely, so it was discarded. Try again.");
+  let copied = 0;
+  const points: { text: string; where: string | null }[] = [];
+  for (const p of parsed.data.points) {
+    const m = /^\[?S(\d{1,2})\]?$/i.exec(p.source.trim());
+    const chunk = m ? sample[Number(m[1]) - 1] : undefined;
+    if (!chunk) continue; // a point that cites nothing real is dropped, not shown
+    if (hasVerbatimRun(p.text, full)) { copied++; continue; }
+    points.push({ text: p.text, where: locationLabel({ ...chunk, heading: null }) || null });
+  }
+  if (points.length < 3) throw new AiError("bad_output", copied ? "The AI copied the source too closely, so its summary was discarded. Try again." : "The AI's summary could not be tied to the source. Try again.");
+  const st = await aiStatus(opts.userId);
+  const model = st.kind === "byok" ? st.model : env.managedAi?.model ?? "unknown";
+  const body: SummaryBody = { overview, points };
+  await db.insert(schema.sourceSummaries).values({ userId: opts.userId, courseId: opts.courseId, documentId: doc.id, body, model })
+    .onConflictDoUpdate({ target: schema.sourceSummaries.documentId, set: { body, model, createdAt: new Date() } });
+  await logActivity(opts.userId, "ai.summary", { courseId: opts.courseId, details: { title: doc.title, points: points.length, droppedCopied: copied } });
   return { ok: true };
 }

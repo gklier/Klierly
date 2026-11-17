@@ -90,6 +90,23 @@ test("the popup offers course discovery on a course site", async () => {
   await popup.close();
 });
 
+test("join the class library: needs the terms ticked, sends only the course identity, and links the Klierly course", async () => {
+  const d = await openDiscover();
+  const bodies: string[] = [];
+  ctx.on("request", (r) => { if (/\/api\/ext\/class$/.test(r.url()) && r.method() === "POST") bodies.push(r.postData() ?? ""); });
+  await expect(d.getByRole("button", { name: "Join the class library" })).toBeDisabled();
+  await d.locator("#class-terms").check();
+  await d.getByRole("button", { name: "Join the class library" }).click();
+  await expect(d.locator("#class-status")).toContainText("This Klierly course is now linked to it.");
+  expect(bodies).toHaveLength(1);
+  const sent = JSON.parse(bodies[0]);
+  expect(Object.keys(sent).sort()).toEqual(["courseId", "externalCourseId", "host", "label", "lms", "termsAccepted"]);
+  expect(sent).toMatchObject({ lms: "canvas", externalCourseId: "77", courseId });
+  await app.goto(`/courses/${courseId}/settings`);
+  await expect(app.getByTestId("class-link")).toContainText("Linked to");
+  await d.close();
+});
+
 test("scan: a structured inventory with reasons for everything that is not offered", async () => {
   const d = await openDiscover();
   await d.getByRole("button", { name: "Scan the Modules page" }).click();

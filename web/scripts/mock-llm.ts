@@ -88,6 +88,15 @@ function topics(prompt: string) {
   ] };
 }
 
+/** Own-words mock summary: never copies more than a couple of source words in a row. */
+function summary(prompt: string, copycat = false) {
+  if (copycat) { const pool = sentences(parseSources(prompt)); return { insufficient: false, reason: "", overview: pool[0]?.s ?? "", points: pool.slice(0, 5).map((p) => ({ text: p.s, source: p.id })) }; }
+  const ids = [...prompt.matchAll(/<source id="(S\d+)"/g)].map((m) => m[1]);
+  if (ids.length < 3) return { insufficient: true, reason: "Not enough material to summarise.", overview: "", points: [] };
+  return { insufficient: false, reason: "", overview: "[mock] This source walks through a worked statistics example and explains how to read the output.",
+    points: ids.slice(0, 6).map((id, i) => ({ text: `[mock] Point ${i + 1}: the presenter explains one step of the procedure and why it matters for the conclusion.`, source: id })) };
+}
+
 function supplement(prompt: string) {
   const pool = sentences(parseSources(prompt));
   if (pool.length < 2) return { covered: "The sources are too thin to tell what the course covers here.", gaps: [{ point: "General background", explanation: "[mock] A general explanation written for testing, not from any course." }], verify: [] };
@@ -112,6 +121,7 @@ export function startMockLlm(port = 4010): Promise<http.Server> {
       else if (body.model === "mock-insufficient" && system.includes("JSON")) content = JSON.stringify({ insufficient: true, reason: "The sources do not cover this topic.", questions: [], summary: "", keyPoints: [] });
       else if (system.includes("practice questions")) content = "```json\n" + JSON.stringify(questions(user)) + "\n```";
       else if (system.includes("study note")) content = JSON.stringify(learnNote(user));
+      else if (system.includes("study summary")) content = JSON.stringify(summary(user, body.model === "mock-copycat"));
       else if (system.includes("fill gaps")) content = JSON.stringify(supplement(user));
       else if (system.includes("study topics")) content = JSON.stringify(topics(user));
       else content = "ok";

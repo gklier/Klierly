@@ -1,7 +1,10 @@
 import { notFound } from "next/navigation";
 import { sql } from "drizzle-orm";
 import { db } from "@/db";
+import { classSharingSwitchAction, moderateAction } from "@/app/actions/sharing";
+import { ActionForm, Submit } from "@/components/forms";
 import { requireUser } from "@/lib/auth";
+import { classOverview, moderationQueue } from "@/lib/classes";
 import { env } from "@/lib/env";
 
 export const metadata = { title: "Operator" };
@@ -28,6 +31,7 @@ export default async function AdminPage() {
       select count(*) filter (where not cached)::int as requests, coalesce(sum(cost_micro_usd), 0)::int as micro
       from ai_usage where provider = 'managed' and created_at >= date_trunc('month', now())`).then((r) => r.rows),
   ]);
+  const [queue, classes] = await Promise.all([moderationQueue(), classOverview()]);
   const pricesKnown = m ? m.price.routine.in + m.price.routine.out > 0 : false;
 
   return (
@@ -69,6 +73,34 @@ export default async function AdminPage() {
             <thead><tr className="border-b border-line text-left text-muted"><th className="px-4 py-2 font-medium">Account</th><th className="px-3 py-2 font-medium">Requests</th><th className="px-3 py-2 font-medium">Tokens</th><th className="px-3 py-2 font-medium">Est. cost</th><th className="px-3 py-2 font-medium">Last used</th></tr></thead>
             <tbody className="divide-y divide-line">{users.rows.map((u) => <tr key={u.email}><td className="px-4 py-2">{u.email}</td><td className="tnum px-3 py-2">{u.requests}</td><td className="tnum px-3 py-2">{u.tokens.toLocaleString("en-US")}</td><td className="tnum px-3 py-2">{pricesKnown ? usd(u.micro) : "—"}</td><td className="tnum px-3 py-2">{new Date(u.last).toLocaleDateString("en-US")}</td></tr>)}</tbody>
           </table></div>
+        )}
+      </section>
+      <section data-testid="class-moderation">
+        <h2 className="text-lg font-semibold">Class libraries</h2>
+        <p className="mt-1 text-sm text-muted">Classes, how many students claimed membership, and how many summaries are shared. Turn sharing off for a class if an instructor or school asks.</p>
+        {classes.length === 0 ? <p className="mt-2 text-muted">No class has been joined yet.</p> : (
+          <div className="panel mt-2 overflow-x-auto"><table className="w-full min-w-[32rem] text-sm">
+            <thead><tr className="border-b border-line text-left text-muted"><th className="px-4 py-2 font-medium">Class</th><th className="px-3 py-2 font-medium">Members</th><th className="px-3 py-2 font-medium">Shared</th><th className="px-3 py-2 font-medium">Sharing</th></tr></thead>
+            <tbody className="divide-y divide-line">{classes.map((c) => (
+              <tr key={c.id}><td className="px-4 py-2">{c.label}<span className="ml-2 text-xs text-muted">{c.host}</span></td><td className="tnum px-3 py-2">{c.members}</td><td className="tnum px-3 py-2">{c.items}</td>
+                <td className="px-3 py-2"><ActionForm action={classSharingSwitchAction} className="flex items-center gap-2"><input type="hidden" name="classId" value={c.id} /><input type="hidden" name="enabled" value={c.sharing_enabled ? "0" : "1"} /><span className={`badge ${c.sharing_enabled ? "badge-good" : "badge-warn"}`}>{c.sharing_enabled ? "On" : "Off"}</span><Submit className="btn btn-sm" pendingText="…">{c.sharing_enabled ? "Turn off" : "Turn on"}</Submit></ActionForm></td></tr>
+            ))}</tbody>
+          </table></div>
+        )}
+        <h3 className="mt-5 text-base font-semibold">Reported or hidden items</h3>
+        {queue.length === 0 ? <p className="mt-1 text-muted">Nothing is waiting for review.</p> : (
+          <ul className="mt-2 space-y-3">{queue.map((q) => (
+            <li key={q.id} className="panel p-4 text-sm">
+              <p className="font-semibold">{q.title} <span className="font-normal text-muted">· {q.label} · {q.reports} {q.reports === 1 ? "report" : "reports"} · {q.status}</span></p>
+              <p className="mt-1">{q.body.overview}</p>
+              {q.reasons.length > 0 && <ul className="mt-1 list-disc pl-5 text-muted">{q.reasons.map((r, i) => <li key={i}>{r}</li>)}</ul>}
+              <div className="mt-3 flex gap-2">
+                {(["restore", "hide", "remove"] as const).map((a) => (
+                  <ActionForm key={a} action={moderateAction}><input type="hidden" name="itemId" value={q.id} /><input type="hidden" name="action" value={a} /><Submit className={a === "remove" ? "btn btn-danger btn-sm" : "btn btn-sm"} pendingText="…">{a === "restore" ? "Restore" : a === "hide" ? "Hide" : "Remove"}</Submit></ActionForm>
+                ))}
+              </div>
+            </li>
+          ))}</ul>
         )}
       </section>
     </div>

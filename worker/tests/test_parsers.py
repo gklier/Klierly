@@ -155,3 +155,17 @@ def test_blank_pdf_is_empty_not_invented(parse):
     buf = io.BytesIO(); w.write(buf)
     r = parse(name="scan.pdf", data=buf.getvalue())
     assert r.status_code == 422 and r.json()["detail"]["code"] == "empty_document"
+
+
+def test_caption_spacing_artifacts_are_repaired_without_changing_wording(parse):
+    vtt = (b"WEBVTT\n\n00:00:00.750 --> 00:00:04.870\nwe will use jump to\ncompute the test statistic and p -value\n\n"
+           b"00:00:05.000 --> 00:00:09.000\nthe online and the in -store scores, a t -test, right -click on a PC\n\n"
+           b"00:00:10.000 --> 00:00:12.000\nthat negative 0 .286 is our D bar, and 5 -10 is a range, not a minus sign: a - b\n")
+    body = parse(name="lecture.vtt", data=vtt).json()
+    text = body["segments"][0]["text"]
+    for fixed in ["p-value", "in-store", "t-test", "right-click", "negative 0.286", "5-10", "a - b"]:
+        assert fixed in text, fixed
+    for broken in ["p -value", "in -store", "0 .286"]:
+        assert broken not in text, broken
+    assert "jump" in text and "online and the in-store" in text  # recognition errors and wording are left alone
+    assert body["segments"][0]["t_start_ms"] == 750

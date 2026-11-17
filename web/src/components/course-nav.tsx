@@ -9,6 +9,7 @@ const ITEMS = [
   { slug: "/materials", label: "Materials", icon: "file" },
   { slug: "/plan", label: "Study plan", icon: "calendar" },
   { slug: "/practice", label: "Practice", icon: "target" },
+  { slug: "/library", label: "Class library", icon: "users" },
   { slug: "/progress", label: "Progress", icon: "chart" },
   { slug: "/settings", label: "Settings", icon: "settings" },
 ];

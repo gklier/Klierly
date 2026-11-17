@@ -25,4 +25,4 @@ export async function logActivity(userId: string, event: string, opts: { courseI
 }
 
 /** Extension events the server will accept from `/api/ext/log`, with the fields each may carry (counts and fixed labels only). */
-export const EXTENSION_EVENTS = new Set(["discovery.scan", "discovery.run", "captions.read", "capture.blocked"]);
+export const EXTENSION_EVENTS = new Set(["discovery.scan", "discovery.run", "captions.read", "capture.blocked", "class.join"]);

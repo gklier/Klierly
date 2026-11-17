@@ -350,5 +350,38 @@ describe("log redaction and search query building", () => {
     expect(toOrQuery("Interpreting the slope & intercept!")).toBe("interpreting | slope | intercept");
     expect(toOrQuery("a:* | ') drop table")).toBe("drop | table");
     expect(toOrQuery("!!! ??")).toBeNull();
+    expect(toOrQuery("JMP output")).toBe("jmp | jump | output"); // captions turn "JMP" into "jump"
+    expect(toOrQuery("how jump works")).toBe("jump | works"); // a plain search for "jump" is left as it is
+  });
+});
+
+
+import { cleanClassLabel, courseNameFromTitle, hasVerbatimRun, looksLikeAssessmentMaterial, membershipActive, parseClassIdentity, MEMBERSHIP_ACTIVE_DAYS } from "@/lib/sharing-rules";
+
+describe("class sharing rules", () => {
+  const source = "So here we have our person. So like for example, this is person one and this is what they said for the perceived quality in store";
+  it("flags a run of eight copied words, ignoring case and punctuation, but not shorter overlaps", () => {
+    expect(hasVerbatimRun("As the lecturer said: this is what they SAID for the perceived quality!", [source])).toBe(true);
+    expect(hasVerbatimRun("The presenter compares perceived quality between buying online and in a shop.", [source])).toBe(false);
+    expect(hasVerbatimRun("this is what they said for the", [source])).toBe(false); // seven words
+    expect(hasVerbatimRun("", [source])).toBe(false);
+  });
+  it("blocks exam-like material and lets study material through", () => {
+    for (const t of ["Midterm 2", "Quiz 3 solutions", "Exam 1 answer key", "Past exam questions", "Final exam paper", "test"]) expect(looksLikeAssessmentMaterial(t), t).toBe(true);
+    for (const t of ["Exam 1 review", "Study guide for the midterm", "Mod 5.4 Paired t-test", "Syllabus: exam format and schedule", "Lecture 6 JMP", "Two-sample t-test in JMP", "Hypothesis tests recap"]) expect(looksLikeAssessmentMaterial(t), t).toBe(false);
+    expect(looksLikeAssessmentMaterial(null, undefined)).toBe(false);
+  });
+  it("accepts only well-formed Canvas identities and tidies names", () => {
+    expect(parseClassIdentity({ lms: "canvas", host: "UFL.instructure.com", externalCourseId: "123456", label: "  ISM3004 \u0000 Fall <b>2026</b> " }))
+      .toEqual({ lms: "canvas", host: "ufl.instructure.com", externalCourseId: "123456", label: "ISM3004 Fall b 2026 /b" });
+    for (const bad of [{ lms: "moodle", host: "a.com", externalCourseId: "1" }, { lms: "canvas", host: "a b", externalCourseId: "1" }, { lms: "canvas", host: "a.com", externalCourseId: "abc" }, { lms: "canvas", host: "a.com", externalCourseId: "" }, {}]) expect(parseClassIdentity(bad)).toBeNull();
+    expect(cleanClassLabel("", "Canvas course 9")).toBe("Canvas course 9");
+    expect(courseNameFromTitle("Modules: ISM3004 – Fall 2026")).toBe("ISM3004 – Fall 2026");
+    expect(courseNameFromTitle("ISM3004")).toBe("ISM3004");
+  });
+  it("lets a claim lapse after the active window", () => {
+    const now = Date.now();
+    expect(membershipActive(new Date(now - 10 * 86400_000), now)).toBe(true);
+    expect(membershipActive(new Date(now - (MEMBERSHIP_ACTIVE_DAYS + 1) * 86400_000), now)).toBe(false);
   });
 });

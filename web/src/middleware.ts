@@ -1,6 +1,6 @@
 import { NextResponse, type NextRequest } from "next/server";
 
-const PUBLIC = [/^\/login$/, /^\/register$/, /^\/privacy$/, /^\/api\/health$/, /^\/api\/ext\//];
+const PUBLIC = [/^\/login$/, /^\/register$/, /^\/privacy$/, /^\/terms\/sharing$/, /^\/api\/health$/, /^\/api\/ext\//];
 
 /** Cheap gate: no session cookie → sign-in. Real authorization happens in every page, action and route. */
 export function middleware(req: NextRequest) {

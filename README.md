@@ -114,6 +114,16 @@ It reads rendered pages in your own tab and does not use the Canvas API. What th
 what has not been established (institutional permission, real Canvas compatibility): `docs/LMS_ACCESS.md`.
 More detail: `extension/README.md`.
 
+## Class library (share AI summaries with classmates)
+
+In the extension's Discover page, tick the terms and choose **Join the class library** while you have your Canvas
+course open; that links your Klierly course to the class. Then, on any source page, **Create summary** (an AI writes
+it in its own words; it stays private) and, if you want, **Share with class**. Classmates see the summary without
+your name, can report it, and you can take it down any time. Operators moderate from the Operator page. Only the
+summary is ever shared, never files, text or quotes. The class check is a claim made through the extension, **not
+verification of enrolment** (Klierly never contacts Canvas). Terms: `/terms/sharing`. Design and limits:
+`docs/DECISIONS.md`.
+
 ## Tests
 
 ```bash

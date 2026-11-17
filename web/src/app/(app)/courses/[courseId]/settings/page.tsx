@@ -1,6 +1,8 @@
 import { deleteCourseAction, updateCourse } from "@/app/actions/courses";
+import { leaveClassAction, unlinkCourseAction } from "@/app/actions/sharing";
 import { ActionForm, ConfirmAction, Submit } from "@/components/forms";
 import { requireUser } from "@/lib/auth";
+import { classAccessForCourse } from "@/lib/classes";
 import { getCourse } from "@/lib/courses";
 
 export const metadata = { title: "Course settings" };
@@ -8,6 +10,7 @@ export const metadata = { title: "Course settings" };
 export default async function CourseSettings({ params }: { params: Promise<{ courseId: string }> }) {
   const user = await requireUser();
   const course = await getCourse(user.id, (await params).courseId);
+  const access = await classAccessForCourse(user.id, course.id);
   return (
     <div className="max-w-2xl space-y-6">
       <h1 className="text-2xl font-semibold">Course settings</h1>
@@ -31,6 +34,21 @@ export default async function CourseSettings({ params }: { params: Promise<{ cou
         </fieldset>
         <Submit pendingText="Saving…">Save changes</Submit>
       </ActionForm>
+
+      <section className="panel p-5" data-testid="class-link">
+        <h2 className="text-base font-semibold">Class library</h2>
+        {access ? (
+          <>
+            <p className="mt-1 text-sm text-muted">Linked to <strong>{access.label}</strong>. {access.active ? "Your claim is current." : "Open the course in Canvas again with the extension to confirm you are still in the class."}</p>
+            <div className="mt-3 flex flex-wrap gap-2">
+              <ConfirmAction action={unlinkCourseAction} hidden={{ courseId: course.id }} label="Unlink this course" confirmLabel="Unlink" description="This course stops being linked to the class. What you already shared stays until you take it down." className="btn btn-sm" />
+              <ConfirmAction action={leaveClassAction} hidden={{ classId: access.classId, courseId: course.id }} label="Leave the class" confirmLabel="Leave the class" description="Everything you shared with this class is taken down and your courses are unlinked." />
+            </div>
+          </>
+        ) : (
+          <p className="mt-1 text-sm text-muted">Not linked. Open this course in Canvas, click the Klierly extension and choose <strong>Join the class library</strong> to share summaries with classmates and read theirs.</p>
+        )}
+      </section>
 
       <section className="panel p-5">
         <h2 className="text-base font-semibold">Delete this course</h2>

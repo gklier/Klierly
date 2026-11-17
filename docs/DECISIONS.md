@@ -92,6 +92,25 @@
   statistics. Not built; waiting on the founder's choices (see the final message of this round).
 - **Google AI Studio**: usable through the generic connection, with a preset. The free tier is
   unsuitable for other students' material (training use and human review per Google's terms); a paid project is.
+- **Class library (built in the fourth round).** The founder decided that students who opened the same
+  Canvas course may share AI summaries of their own material, with no lawyer review ("as long as bases are
+  covered"). What exists, and what it cannot do:
+  - *Who is in the class:* a student joins from the extension while the Canvas course is open; the server
+    records (host, course number) and the course name from the page title. **This is a claim, not proof**:
+    Klierly never talks to Canvas, so anyone with the extension and a course URL can claim membership. The
+    friction is real (token, extension, a course page, ticked terms) but it is not enrolment verification.
+    Claims lapse after 120 days without the course being opened again.
+  - *What may be shared:* only the AI summary (overview and cited points), by explicit action, one source at a
+    time, never files, extracted text, quotes, or the author's name. Summaries are generated in the AI's own
+    words; any overview or point that reuses a run of 8 or more words from the source is discarded, and the
+    check is repeated at the moment of sharing. Sources whose title or file name looks like an exam, quiz or
+    answer key cannot be summarised-and-shared (conservative: it may refuse some legitimate titles).
+  - *Control:* the author can take down any item, leaving a class takes down everything, two different
+    classmates' reports hide an item until the operator looks, the operator can hide, restore or remove items
+    and switch a class off (for example if an instructor asks). A plain-language terms page is versioned and the
+    version is stored with each shared item. It says plainly that it has not been reviewed by a lawyer.
+  - *Not done:* any check of what the summary says against the instructor's rights beyond the wording
+    overlap; instructor opt-out beyond the operator switch; abuse handling beyond reports.
 - **Docker is now verified on x86_64** (it was never built before); the build found a real startup bug.
   CI builds and starts the stack on every PR, and has a manual/main-only emulated Arm64 job.
 - **Oracle**: the guide recommends private access through an SSH tunnel first (no public ports, no

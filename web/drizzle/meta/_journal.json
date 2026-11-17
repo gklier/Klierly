@@ -29,6 +29,13 @@
       "when": 1794697194695,
       "tag": "0003_activity_formats_supplements",
       "breakpoints": true
+    },
+    {
+      "idx": 4,
+      "version": "7",
+      "when": 1794880226245,
+      "tag": "0004_class_sharing",
+      "breakpoints": true
     }
   ]
 }

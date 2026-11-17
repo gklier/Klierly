@@ -16,7 +16,7 @@ export default function PrivacyPage() {
           <li>What you do: courses, modules, topics, study plans, practice answers, timing, mistake tags and question reports.</li>
           <li>An activity log of your own actions and what the system did for you (imports, extension runs, AI requests, practice, settings): events, counts and the titles of your sources and topics, never what your documents say, prompts, answers or keys. You can read, download and clear it on the Activity page; it is deleted with your account.</li>
           <li>If you connect an AI provider: its address, model name, and your API key encrypted on the server; counts of requests and tokens.</li>
-        </ul><p>All of it is tied to your account. Other users cannot see it, there is no shared library, and nothing you import is published.</p></section>
+        </ul><p>All of it is tied to your account and other users cannot see it, with one exception you control: if you join a class library, an AI summary you choose to share (never your files, text or quotes) is visible to classmates, without your name. Nothing else you import is published. See the <a className="link" href="/terms/sharing">class library terms</a>.</p></section>
         <section><h2>Where your data goes</h2><ul>
           <li><strong>The Klierly server</strong> (the machine running this app) stores everything above in its database and upload folder.</li>
           <li><strong>The parsing service</strong> runs on the same server. It receives each file to extract text and keeps nothing.</li>

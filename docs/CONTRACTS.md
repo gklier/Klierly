@@ -157,3 +157,12 @@ active graded assessment), `404 course_not_found`, `401 invalid_token`,
 
 The import goes through exactly the same ingestion pipeline as file upload
 and paste (ImportJob → worker `/parse-text` → chunking → index).
+
+### `POST /api/ext/class`
+```json
+{ "lms": "canvas", "host": "ufl.instructure.com", "externalCourseId": "123456",
+  "label": "page title, reduced to the course name", "courseId": "uuid or null", "termsAccepted": true }
+```
+`200 {"classId":"uuid","label":"…","sharingEnabled":true,"linked":true}`. Records that this student says they are
+in the class (it cannot be verified) and links their Klierly course when `courseId` is given and theirs.
+Errors: `400 bad_class`, `400 terms_required`, `404 course_not_found`, `401 invalid_token`, `429 rate_limited`.

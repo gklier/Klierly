@@ -8,10 +8,10 @@ Run on 2026-11-14 in a Linux x86_64 container: Node 22, Python 3.13, PostgreSQL 
 
 | Command | Result |
 | --- | --- |
-| `cd worker && python -m pytest -q` | **25 passed** |
+| `cd worker && python -m pytest -q` | **26 passed** |
 | `cd web && npm run typecheck` / `npm run lint` | clean / clean |
-| `cd web && npm test` (real PostgreSQL + real worker + mock AI) | **88 passed** |
-| `cd web && npm run test:e2e` (production build; Chromium with the extension loaded) | **36 passed**: 19 journey, 7 single-page capture, 10 course discovery, captions, Mediasite and extension logging |
+| `cd web && npm test` (real PostgreSQL + real worker + mock AI) | **101 passed** |
+| `cd web && npm run test:e2e` (production build; Chromium with the extension loaded) | **44 passed**: 19 journey, 7 single-page capture, 11 course discovery (incl. joining a class), captions, Mediasite and extension logging, 7 class library |
 | `cd extension && npm test` | **17 passed** |
 | `npm audit --omit=dev` (web) · `pip-audit` (worker, Phase 1) | 0 vulnerabilities · none known |
 | `docker compose config` | valid (syntax only) |
@@ -40,6 +40,7 @@ further runs and its text was not captured. Treat as an open flake.
 | Feature | Evidence |
 | --- | --- |
 | Topics from learning objectives; near-duplicate merging | unit: the four real "Module 21" objectives (unbulleted, under a "Learning Objectives" line) become "Wilcoxon Rank Sum and Mann-Whitney test", "Kruskal Wallace test", "Rank data from other forms of data", "When to use …"; reworded duplicates merged; integration: 12 objective topics from the syllabus, nothing applied without review, a reworded heading is not suggested again |
+| Class library | unit: 8-word copy detector (case/punctuation-insensitive, 7 words passes), exam-title heuristic ("t-test" and "Exam 1 review" pass, "Midterm 2" and "Quiz 3 solutions" blocked), identity parsing, claim expiry. Integration (real Postgres, mock AI): joining is idempotent and never links someone else's course; a copying model's summary is discarded; sharing needs a linked course, a current claim and a non-exam title; the shared row contains no source text, file name or author; a different class and a lapsed claim see nothing; reports need two different classmates, the author cannot report, the operator can hide/restore, switch a class off; take-down, leaving a class and deleting an account remove shared items. E2E: terms required, summary private until consent, classmate sees an AI-labelled item without a name, report, operator hides and restores it, outsider sees nothing, student gets 404 on `/admin`; extension E2E: join sends exactly six fields and links the course. **Not verified:** enrolment (it cannot be), real Canvas titles, real AI summary quality, whether instructors accept this. |
 | Exam format from the syllabus | unit: question counts, types, minutes, points, matching to Exam 1 / Final, implausible numbers rejected; integration: two formats stored with their evidence; E2E: the plan form is prefilled with 27 questions / 75 minutes and the blueprint uses them |
 | AI "what your notes leave out" | integration: stored apart from notes, never feeds questions, refused without material or when the course disallows AI; E2E: shown in a dashed box labelled not from the course, no links, with a verify list |
 | Activity log, diagnostics download, clear | integration: events present for imports, failures, AI, practice, plan; redaction keeps token counts, drops text/prompt/key fields, caps size, survives course deletion; E2E: page filters, export holds counts and titles but no document sentences, email, password or key, and is refused without a session |

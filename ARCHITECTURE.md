@@ -120,6 +120,16 @@ log redaction, security headers.
   redaction as server logs; the extension reports run summaries via `POST /api/ext/log` (fixed event names,
   size-limited, redacted). Viewed and exported at `/activity` and `/api/activity/export`.
 
+### Class library
+
+Tables `class_spaces` (host + Canvas course number), `class_members` (claimed, with a refresh time),
+`source_summaries` (a student's private AI summary of one source), `shared_items` (a copy of a summary the
+student chose to share: no source text, file name or author shown), `shared_reports`. Pure rules (copy detector,
+exam-title heuristic, identity parsing, claim expiry) are in `web/src/lib/sharing-rules.ts`; database logic in
+`web/src/lib/classes.ts`; the summary generator in `web/src/lib/ai/generate.ts`. Every read goes through a check
+that the student has a current claim to that class. Membership is a claim, not verification (see
+`docs/DECISIONS.md`).
+
 ## Deployment options
 
 - **Local** (default): processes or `docker compose up`; web bound to 127.0.0.1.

@@ -8,9 +8,17 @@ export type RetrievedChunk = {
 
 const STOP = new Set(["the", "and", "for", "with", "that", "this", "from", "are", "was", "what", "which", "when", "how", "why", "does", "into", "about", "your", "you", "can", "not", "but", "has", "have", "its", "their", "them", "then", "than", "also", "use", "using"]);
 
+/**
+ * Words that automatic captions habitually get wrong, mapped to what they come out as. A search for the
+ * left side also looks for the right, so "JMP output" finds a lecture where the speaker's "JMP" was
+ * transcribed as "jump". Kept short and course-agnostic on purpose.
+ */
+export const CAPTION_ALIASES: Record<string, string[]> = { jmp: ["jump"] };
+
 /** Build a safe OR tsquery from free text (never interpolate raw input into to_tsquery). */
 export function toOrQuery(text: string): string | null {
-  const tokens = [...new Set((text.toLowerCase().match(/[a-z][a-z0-9]{2,}|\d+(?:\.\d+)?/g) ?? []).filter((t) => !STOP.has(t)))].slice(0, 24);
+  const base = [...new Set((text.toLowerCase().match(/[a-z][a-z0-9]{2,}|\d+(?:\.\d+)?/g) ?? []).filter((t) => !STOP.has(t)))].slice(0, 24);
+  const tokens = [...new Set(base.flatMap((t) => [t, ...(CAPTION_ALIASES[t] ?? [])]))].slice(0, 28);
   return tokens.length ? tokens.map((t) => t.replace(/[^a-z0-9.]/g, "")).filter(Boolean).join(" | ") : null;
 }
 
