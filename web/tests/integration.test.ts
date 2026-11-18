@@ -462,7 +462,7 @@ describe("managed AI (no key needed)", () => {
   });
 
   it("generates without any user key, accounts requests, tokens and cost, and uses the stronger model only for retries", async () => {
-    configure();
+    configure({ MANAGED_AI_MODEL: "mock-cheap-retry", MANAGED_AI_MODEL_STRONG: "mock-strong-retry" });
     const status = await aiStatus(bob.id);
     expect(status).toMatchObject({ available: true, kind: "managed", label: "Klierly AI", usedToday: 0, dailyLimit: 40 });
     expect(JSON.stringify(status)).not.toContain(MOCK_KEY); // what the UI receives carries no credential
@@ -472,9 +472,9 @@ describe("managed AI (no key needed)", () => {
     expect(rows.every((r) => r.provider === "managed" && r.ok)).toBe(true);
     const routine = rows.filter((r) => r.tier === "routine"), strong = rows.filter((r) => r.tier === "strong");
     expect(routine.length).toBe(2); // one first attempt per topic on the inexpensive model
-    expect(routine.every((r) => r.model === "mock-cheap")).toBe(true);
+    expect(routine.every((r) => r.model === "mock-cheap-retry")).toBe(true);
     expect(strong.length).toBeGreaterThanOrEqual(1); // the mock's first reply contains invalid drafts → retry
-    expect(strong.every((r) => r.model === "mock-strong")).toBe(true);
+    expect(strong.every((r) => r.model === "mock-strong-retry")).toBe(true);
     for (const r of rows) {
       const price = r.tier === "strong" ? { in: 5, out: 20 } : { in: 0.5, out: 2 };
       expect(r.costMicroUsd).toBe(Math.round(r.promptTokens! * price.in + r.completionTokens! * price.out));

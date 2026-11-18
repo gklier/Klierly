@@ -32,7 +32,7 @@ function sentences(src: Source[]): { id: string; s: string }[] {
 
 const hash = (s: string) => { let h = 7; for (const c of s) h = (h * 31 + c.charCodeAt(0)) >>> 0; return h; };
 
-function questions(prompt: string) {
+function questions(prompt: string, forceRetry = false) {
   const topic = /^Topic: (.*)$/m.exec(prompt)?.[1] ?? "topic";
   const count = Number(/^Write (\d+) questions/m.exec(prompt)?.[1] ?? 3);
   const retry = prompt.includes("Your previous attempt had problems");
@@ -65,7 +65,16 @@ function questions(prompt: string) {
       choices: [ending(words), ...others], correctIndex: 0, hint: "Recall how the idea was stated.", explanation: `The source states: "${s}"`,
       citations: [{ source: id, quote: s }], grounding: "direct", difficulty: 2 });
   }
-  return { insufficient: false, reason: "", questions: out };
+  if (forceRetry && retry) {
+    return { insufficient: false, reason: "", questions: [{
+      type: "numeric", stem: `[mock] Calculate the expected response at input ${x + 1} for a model with intercept ${a + 1} and slope ${b + 1}. Topic: ${topic}.`,
+      answer: a + 1 + (b + 1) * (x + 1), unit: "",
+      check: { fn: "regression_predict", args: { intercept: a + 1, coefficients: [b + 1], values: [x + 1] } },
+      hint: "Multiply the input by the slope and add the intercept.", explanation: "Evaluate the supplied fitted model.",
+      citations: [{ source: pool[0].id, quote: pool[0].s }], grounding: "extrapolated", difficulty: 1,
+    }] };
+  }
+  return { insufficient: false, reason: "", questions: forceRetry ? out.slice(0, count + 1) : out };
 }
 
 function learnNote(prompt: string) {
@@ -119,7 +128,7 @@ export function startMockLlm(port = 4010): Promise<http.Server> {
       if (body.model === "mock-missing") return send(404, { error: { message: "model not found" } });
       if (body.model === "mock-garbage") content = "Sure! Here are some questions: 1) What is regression?";
       else if (body.model === "mock-insufficient" && system.includes("JSON")) content = JSON.stringify({ insufficient: true, reason: "The sources do not cover this topic.", questions: [], summary: "", keyPoints: [] });
-      else if (system.includes("practice questions")) content = "```json\n" + JSON.stringify(questions(user)) + "\n```";
+      else if (system.includes("practice questions")) content = "```json\n" + JSON.stringify(questions(user, Boolean(body.model?.endsWith("-retry")))) + "\n```";
       else if (system.includes("study note")) content = JSON.stringify(learnNote(user));
       else if (system.includes("study summary")) content = JSON.stringify(summary(user, body.model === "mock-copycat"));
       else if (system.includes("fill gaps")) content = JSON.stringify(supplement(user));
