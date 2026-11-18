@@ -26,7 +26,7 @@ export async function currentSessionId() {
   return sha256((await cookies()).get(SESSION_COOKIE)?.value ?? "");
 }
 
-export async function requireRecentUser(scope = "admin") {
+export async function requireRecentUser(scope: string) {
   const user = await requireUser();
   const [session] = await db.update(schema.sessions).set({ reauthScope: null, reauthExpiresAt: null }).where(and(
     eq(schema.sessions.id, await currentSessionId()), eq(schema.sessions.userId, user.id),
@@ -36,8 +36,8 @@ export async function requireRecentUser(scope = "admin") {
   return user;
 }
 
-export async function requireAdmin() {
-  const user = await requireRecentUser();
+export async function requireAdmin(scope: string) {
+  const user = await requireRecentUser(scope);
   if (!user.isAdmin) throw new Error("Access denied.");
   return user;
 }

@@ -7,6 +7,7 @@ import {
   verifyAuthenticationResponse, verifyRegistrationResponse,
   type AuthenticationResponseJSON, type RegistrationResponseJSON, type AuthenticatorTransport,
 } from "@simplewebauthn/server";
+import { confirmationScope, validConfirmationScope } from "@/lib/approval-scope";
 import { db, schema, type Tx } from "@/db";
 import { issueSession, setSessionCookie, requireUser, sameOrigin } from "@/lib/auth";
 import { randomToken, sha256 } from "@/lib/crypto";
@@ -27,7 +28,7 @@ async function saveChallenge(challenge: string, purpose: "login" | "enroll" | "a
   const previous = jar.get(CHALLENGE_COOKIE)?.value;
   if (previous) await db.delete(schema.webauthnChallenges).where(eq(schema.webauthnChallenges.id, sha256(previous)));
   const token = randomToken();
-  await db.insert(schema.webauthnChallenges).values({ id: sha256(token), challenge, purpose, userId, invitationId, sessionId: purpose === "add" || purpose === "stepup" ? await currentSessionId() : null, scope, expiresAt: new Date(Date.now() + 300_000) });
+  await db.insert(schema.webauthnChallenges).values({ id: sha256(token), challenge, purpose, userId, invitationId, sessionId: purpose === "add" || purpose === "stepup" ? await currentSessionId() : null, scope, expiresAt: new Date(Date.now() + (purpose === "add" ? 30_000 : 300_000)) });
   jar.set(CHALLENGE_COOKIE, token, { httpOnly: true, secure: env.secureCookies, sameSite: "strict", path: "/", maxAge: 300 });
 }
 
@@ -48,7 +49,7 @@ export async function authenticationOptions(scope?: string) {
   await begin();
   const options = await generateAuthenticationOptions({ rpID: passkeySite().rpID, userVerification: "required" });
   if (scope) {
-    if (!["admin", "passkey-add", "passkey-remove", "account-delete", "extension-token"].includes(scope)) throw invalid();
+    if (!validConfirmationScope(scope)) throw invalid();
     const user = await requireUser();
     await saveChallenge(options.challenge, "stepup", user.id, undefined, scope);
   } else {
@@ -148,7 +149,8 @@ export async function registerPasskey(response: RegistrationResponseJSON, name: 
 }
 
 export async function removePasskey(id: string) {
-  const user = await requireRecentUser("passkey-remove");
+  const form = new FormData(); form.set("passkeyId", id);
+  const user = await requireRecentUser(await confirmationScope("passkey-remove", form));
   await db.transaction(async (tx: Tx) => {
     await tx.execute(sql`select id from users where id = ${user.id} for update`);
     const keys = await tx.select({ id: schema.passkeys.id }).from(schema.passkeys).where(eq(schema.passkeys.userId, user.id));

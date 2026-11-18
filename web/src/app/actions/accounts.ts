@@ -1,5 +1,6 @@
 "use server";
 
+import { confirmationScope } from "@/lib/approval-scope";
 import { revalidatePath } from "next/cache";
 import { and, eq, sql } from "drizzle-orm";
 import { db, schema } from "@/db";
@@ -12,7 +13,7 @@ export type AccountState = ActionState & { enrollmentUrl?: string };
 const emailPattern = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
 export async function approveAccount(_state: AccountState, form: FormData): Promise<AccountState> {
-  const operator = await requireAdmin();
+  const operator = await requireAdmin(await confirmationScope("account-create", form));
   await consumeLimit(`account-approval:${operator.id}`, 30, 3600);
   const email = String(form.get("email") ?? "").trim().toLowerCase();
   const name = String(form.get("name") ?? "").trim();
@@ -31,8 +32,9 @@ export async function approveAccount(_state: AccountState, form: FormData): Prom
 }
 
 export async function recoverAccount(_state: AccountState, form: FormData): Promise<AccountState> {
-  const operator = await requireAdmin();
+  const operator = await requireAdmin(await confirmationScope("account-recover", form));
   const id = String(form.get("userId") ?? "");
+  if (!/^[0-9a-f-]{36}$/.test(id)) return { error: "Account not found." };
   if (id === operator.id) return { error: "Add a second passkey in Settings. Ask the server operator for recovery if you lose all passkeys." };
   if (form.get("verified") !== "on") return { error: "Confirm that you verified the requester's identity through their approved email address." };
   await consumeLimit(`account-recovery:${operator.id}`, 10, 3600);
@@ -52,8 +54,9 @@ export async function recoverAccount(_state: AccountState, form: FormData): Prom
 }
 
 export async function setAccountDisabled(_state: ActionState, form: FormData): Promise<ActionState> {
-  const operator = await requireAdmin();
+  const operator = await requireAdmin(await confirmationScope("account-disable", form));
   const id = String(form.get("userId") ?? "");
+  if (!/^[0-9a-f-]{36}$/.test(id)) return { error: "Account not found." };
   const disabled = form.get("disabled") === "true";
   if (id === operator.id) return { error: "You cannot disable your own account." };
   await db.transaction(async (tx) => {
@@ -70,7 +73,7 @@ export async function setAccountDisabled(_state: ActionState, form: FormData): P
 }
 
 export async function approveClassMember(_state: ActionState, form: FormData): Promise<ActionState> {
-  await requireAdmin();
+  await requireAdmin(await confirmationScope("class-member", form));
   await db.update(schema.classMembers).set({ approved: form.get("approved") === "true" }).where(and(
     eq(schema.classMembers.userId, String(form.get("userId") ?? "")),
     eq(schema.classMembers.classId, String(form.get("classId") ?? "")),

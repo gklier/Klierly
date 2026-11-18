@@ -56,3 +56,16 @@ it("reserves per-user storage under concurrent imports", async () => {
   const rejected = results.find((result) => result.status === "rejected");
   expect(rejected?.status === "rejected" && rejected.reason).toMatchObject({ code: "storage_limit" });
 });
+
+import { confirmationScope, validConfirmationScope } from "@/lib/approval-scope";
+it("binds passkey approval to the operation and exact target", async () => {
+  const form = new FormData();
+  form.set("userId", "first-user"); form.set("disabled", "true");
+  const scope = await confirmationScope("account-disable", form);
+  expect(validConfirmationScope(scope)).toBe(true);
+  expect(validConfirmationScope(`${scope}:extra`)).toBe(false);
+  form.set("userId", "second-user");
+  expect(await confirmationScope("account-disable", form)).not.toBe(scope);
+  expect(await confirmationScope("account-recover", form)).not.toBe(scope);
+  expect(validConfirmationScope("admin")).toBe(false);
+});

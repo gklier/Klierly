@@ -1,5 +1,6 @@
 "use server";
 
+import { confirmationScope } from "@/lib/approval-scope";
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import type { ActionState } from "@/components/forms";
@@ -89,7 +90,7 @@ export async function unlinkCourseAction(_: ActionState, fd: FormData): Promise<
 const requireOperator = requireAdmin;
 
 export async function moderateAction(_: ActionState, fd: FormData): Promise<ActionState> {
-  await requireOperator();
+  await requireOperator(await confirmationScope("class-moderate", fd));
   const itemId = s(fd, "itemId"), action = s(fd, "action");
   if (!uuid(itemId) || !["hide", "restore", "remove"].includes(action)) return { error: "Bad request." };
   await moderate(itemId, action as "hide" | "restore" | "remove");
@@ -98,7 +99,7 @@ export async function moderateAction(_: ActionState, fd: FormData): Promise<Acti
 }
 
 export async function classSharingSwitchAction(_: ActionState, fd: FormData): Promise<ActionState> {
-  await requireOperator();
+  await requireOperator(await confirmationScope("class-sharing", fd));
   const classId = s(fd, "classId");
   if (!uuid(classId)) return { error: "Bad request." };
   await setClassSharing(classId, s(fd, "enabled") === "1");

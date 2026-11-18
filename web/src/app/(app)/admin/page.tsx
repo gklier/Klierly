@@ -51,7 +51,7 @@ export default async function AdminPage() {
           <p>{account.name} · {account.email} · {account.isAdmin ? "Administrator" : account.disabled ? "Disabled" : "Approved"}</p>
           {!account.isAdmin && <>
             {!account.disabled && <AccountInvitationForm userId={account.id} />}
-            <ActionForm stepUp="admin" action={setAccountDisabled}>
+            <ActionForm stepUp="account-disable" action={setAccountDisabled}>
               <input type="hidden" name="userId" value={account.id} /><input type="hidden" name="disabled" value={String(!account.disabled)} />
               <Submit className="btn btn-sm">{account.disabled ? "Enable account" : "Disable account and revoke access"}</Submit>
             </ActionForm>
@@ -59,7 +59,7 @@ export default async function AdminPage() {
         </div>)}
       </section>
       <section className="panel p-5 space-y-3"><h2 className="text-lg font-semibold">Class membership approvals</h2><p className="text-sm">Verify enrollment independently before approving access to shared summaries.</p>
-        {memberships.map((member) => <ActionForm stepUp="admin" key={`${member.classId}:${member.userId}`} action={approveClassMember}>
+        {memberships.map((member) => <ActionForm stepUp="class-member" key={`${member.classId}:${member.userId}`} action={approveClassMember}>
           <p>{member.email} · {member.label} · {member.approved ? "Approved" : "Awaiting approval"}</p>
           <input type="hidden" name="userId" value={member.userId} /><input type="hidden" name="classId" value={member.classId} /><input type="hidden" name="approved" value={String(!member.approved)} />
           <Submit className="btn btn-sm">{member.approved ? "Revoke membership" : "Approve verified membership"}</Submit>
@@ -112,7 +112,7 @@ export default async function AdminPage() {
             <thead><tr className="border-b border-line text-left text-muted"><th className="px-4 py-2 font-medium">Class</th><th className="px-3 py-2 font-medium">Members</th><th className="px-3 py-2 font-medium">Shared</th><th className="px-3 py-2 font-medium">Sharing</th></tr></thead>
             <tbody className="divide-y divide-line">{classes.map((c) => (
               <tr key={c.id}><td className="px-4 py-2">{c.label}<span className="ml-2 text-xs text-muted">{c.host}</span></td><td className="tnum px-3 py-2">{c.members}</td><td className="tnum px-3 py-2">{c.items}</td>
-                <td className="px-3 py-2"><ActionForm stepUp="admin" action={classSharingSwitchAction} className="flex items-center gap-2"><input type="hidden" name="classId" value={c.id} /><input type="hidden" name="enabled" value={c.sharing_enabled ? "0" : "1"} /><span className={`badge ${c.sharing_enabled ? "badge-good" : "badge-warn"}`}>{c.sharing_enabled ? "On" : "Off"}</span><Submit className="btn btn-sm" pendingText="…">{c.sharing_enabled ? "Turn off" : "Turn on"}</Submit></ActionForm></td></tr>
+                <td className="px-3 py-2"><ActionForm stepUp="class-sharing" action={classSharingSwitchAction} className="flex items-center gap-2"><input type="hidden" name="classId" value={c.id} /><input type="hidden" name="enabled" value={c.sharing_enabled ? "0" : "1"} /><span className={`badge ${c.sharing_enabled ? "badge-good" : "badge-warn"}`}>{c.sharing_enabled ? "On" : "Off"}</span><Submit className="btn btn-sm" pendingText="…">{c.sharing_enabled ? "Turn off" : "Turn on"}</Submit></ActionForm></td></tr>
             ))}</tbody>
           </table></div>
         )}
@@ -125,7 +125,7 @@ export default async function AdminPage() {
               {q.reasons.length > 0 && <ul className="mt-1 list-disc pl-5 text-muted">{q.reasons.map((r, i) => <li key={i}>{r}</li>)}</ul>}
               <div className="mt-3 flex gap-2">
                 {(["restore", "hide", "remove"] as const).map((a) => (
-                  <ActionForm stepUp="admin" key={a} action={moderateAction}><input type="hidden" name="itemId" value={q.id} /><input type="hidden" name="action" value={a} /><Submit className={a === "remove" ? "btn btn-danger btn-sm" : "btn btn-sm"} pendingText="…">{a === "restore" ? "Restore" : a === "hide" ? "Hide" : "Remove"}</Submit></ActionForm>
+                  <ActionForm stepUp="class-moderate" key={a} action={moderateAction}><input type="hidden" name="itemId" value={q.id} /><input type="hidden" name="action" value={a} /><Submit className={a === "remove" ? "btn btn-danger btn-sm" : "btn btn-sm"} pendingText="…">{a === "restore" ? "Restore" : a === "hide" ? "Hide" : "Remove"}</Submit></ActionForm>
                 ))}
               </div>
             </li>

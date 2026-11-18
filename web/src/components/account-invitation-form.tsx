@@ -5,7 +5,7 @@ import { approveAccount, recoverAccount, type AccountState } from "@/app/actions
 
 export function AccountInvitationForm({ userId }: { userId?: string }) {
   const [state, action, pending] = useActionState<AccountState, FormData>(userId ? recoverAccount : approveAccount, {});
-  return <PasskeyApprovalForm scope="admin" action={action} className="space-y-3">
+  return <PasskeyApprovalForm scope={userId ? "account-recover" : "account-create"} action={action} className="space-y-3">
     {userId ? <>
       <input name="userId" type="hidden" value={userId} />
       <label className="text-sm"><input type="checkbox" name="verified" required /> I verified this request through the approved email address. Revoke existing passkeys and issue a new enrollment link.</label>

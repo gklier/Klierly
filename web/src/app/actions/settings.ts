@@ -1,8 +1,9 @@
 "use server";
 
+import { confirmationScope } from "@/lib/approval-scope";
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
-import { and, eq } from "drizzle-orm";
+import { and, eq, sql } from "drizzle-orm";
 import { db, schema } from "@/db";
 import type { ActionState } from "@/components/forms";
 import { AiError, checkBaseUrl, getProvider, rawChat } from "@/lib/ai/provider";
@@ -65,11 +66,14 @@ export async function removeProvider(_: ActionState): Promise<ActionState> {
 
 /** The pairing token is shown exactly once; only its hash is stored. */
 export async function createExtensionToken(_: ActionState, fd: FormData): Promise<ActionState & { token?: string }> {
-  const user = await requireRecentUser("extension-token");
-  const existing = await db.select({ id: schema.extensionTokens.id }).from(schema.extensionTokens).where(eq(schema.extensionTokens.userId, user.id));
-  if (existing.length >= 5) return { error: "You already have 5 pairing tokens. Revoke one first." };
+  const user = await requireRecentUser(await confirmationScope("extension-token", fd));
   const token = `clx_${randomToken(30)}`;
-  await db.insert(schema.extensionTokens).values({ userId: user.id, tokenHash: sha256(token), label: String(fd.get("label") ?? "").trim().slice(0, 60) || "Browser extension" });
+  await db.transaction(async (tx) => {
+    await tx.execute(sql`select id from users where id = ${user.id} for update`);
+    const existing = await tx.select({ id: schema.extensionTokens.id }).from(schema.extensionTokens).where(eq(schema.extensionTokens.userId, user.id));
+    if (existing.length >= 5) throw new Error("You already have 5 pairing tokens. Revoke one first.");
+    await tx.insert(schema.extensionTokens).values({ userId: user.id, tokenHash: sha256(token), label: String(fd.get("label") ?? "").trim().slice(0, 60) || "Browser extension" });
+  });
   revalidatePath("/settings");
   await logActivity(user.id, "settings.token_created", { source: "web" });
   return { ok: "Token created.", token };

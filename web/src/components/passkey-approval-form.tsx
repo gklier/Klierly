@@ -1,5 +1,6 @@
 "use client";
 import { useRef, useState, type ReactNode, type FormEvent, type Ref } from "react";
+import { confirmationScope } from "@/lib/approval-scope";
 import { startAuthentication } from "@simplewebauthn/browser";
 import { authenticationOptions, authenticate } from "@/app/actions/passkeys";
 
@@ -19,10 +20,11 @@ export function PasskeyApprovalForm({ action, scope, children, className, formRe
     const form = event.currentTarget;
     setError(""); setBusy(true);
     try {
-      await confirmWithPasskey(scope);
+      await confirmWithPasskey(await confirmationScope(scope, new FormData(form)));
       authorized.current = true;
       form.requestSubmit();
     } catch (error) {
+      authorized.current = false;
       setError(error instanceof Error ? error.message : "Passkey confirmation failed.");
     } finally { setBusy(false); }
   }

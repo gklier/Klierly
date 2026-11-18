@@ -1,6 +1,6 @@
 import { cookies, headers } from "next/headers";
 import { redirect } from "next/navigation";
-import { and, eq, gt, lt } from "drizzle-orm";
+import { and, eq, gt } from "drizzle-orm";
 import { cache } from "react";
 import { db, schema, type Tx } from "@/db";
 import { env } from "./env";
@@ -24,11 +24,6 @@ export async function setSessionCookie(session: { token: string; expiresAt: Date
   });
 }
 
-export async function createSession(userId: string) {
-  const session = await db.transaction((tx) => issueSession(tx, userId));
-  await db.delete(schema.sessions).where(lt(schema.sessions.expiresAt, new Date()));
-  await setSessionCookie(session);
-}
 
 export async function destroySession() {
   const jar = await cookies();
