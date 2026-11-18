@@ -18,7 +18,7 @@ services:
       interval: 5s
       timeout: 3s
       retries: 12
-    networks: [internal]
+    networks: [backend]
 
   worker:
     mem_limit: 1g
@@ -33,7 +33,7 @@ services:
     tmpfs: [/tmp]
     cap_drop: [ALL]
     security_opt: ["no-new-privileges:true"]
-    networks: [internal]
+    networks: [backend]
 
   web:
     mem_limit: 2g
@@ -75,11 +75,13 @@ services:
       - "127.0.0.1:3000:3000"
     cap_drop: [ALL]
     security_opt: ["no-new-privileges:true"]
-    networks: [internal]
+    networks: [backend, edge]
 
 volumes:
   db-data:
   uploads:
 
 networks:
-  internal:
+  backend:
+    internal: true
+  edge:

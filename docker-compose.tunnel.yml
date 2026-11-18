@@ -1,23 +1,27 @@
-# OPTIONAL public access through a Cloudflare Tunnel (never run automatically). Nothing is published on this machine's
-# network: cloudflared makes an outbound connection to Cloudflare and Cloudflare forwards visitors to http://web:3000.
-#   docker compose -f docker-compose.yml -f docker-compose.tunnel.yml up -d --build
-# Requires in .env: CLOUDFLARE_TUNNEL_TOKEN (from the Cloudflare dashboard), APP_URL=https://<your hostname>,
-# INVITE_CODE=<long random>. Full steps: docs/DEPLOY_CLOUDFLARE.md
+# Public HTTPS through the dedicated Cloudflare Tunnel. Create the tunnel and
+# DNS route first. Keep the account-wide Cloudflare certificate off this VM.
+# Mount only this tunnel's credential and routing files from /etc/klierly-tunnel.
 services:
   web:
     ports: !reset []
     environment:
-      APP_URL: ${APP_URL:?set APP_URL to the https:// address of the tunnel hostname}
+      APP_URL: ${APP_URL:?set APP_URL to the final https:// hostname}
       TRUST_CLOUDFLARE: "true"
       ALLOW_PRIVATE_AI_ENDPOINTS: "false"
 
   cloudflared:
-    image: cloudflare/cloudflared:2025.11.1
+    image: cloudflare/cloudflared:2026.11.1
+    user: "65532:65532"
     restart: unless-stopped
-    depends_on: [web]
-    command: tunnel --no-autoupdate run
-    environment:
-      TUNNEL_TOKEN: ${CLOUDFLARE_TUNNEL_TOKEN:?set CLOUDFLARE_TUNNEL_TOKEN}
+    read_only: true
+    mem_limit: 192m
+    cpus: 0.5
+    pids_limit: 64
+    depends_on:
+      web: { condition: service_healthy }
+    command: tunnel --no-autoupdate --config /etc/cloudflared/config.yml run
+    volumes:
+      - /etc/klierly-tunnel:/etc/cloudflared:ro
     cap_drop: [ALL]
     security_opt: ["no-new-privileges:true"]
-    networks: [internal]
+    networks: [edge]

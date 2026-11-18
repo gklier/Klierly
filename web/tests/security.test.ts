@@ -29,3 +29,30 @@ describe("bounded request parsing", () => {
     expect((await req.formData()).get("title")).toBe("Study notes");
   });
 });
+
+// Storage reservations must serialize across simultaneous imports, including
+// requests arriving through different import endpoints.
+import { beforeAll, afterAll } from "vitest";
+import { eq } from "drizzle-orm";
+import { db, getPool, schema } from "@/db";
+import { prepareDb, makeUser, makeCourse } from "./helpers";
+import { createSource } from "@/lib/ingest/pipeline";
+import { deleteAccount } from "@/lib/courses";
+let quotaUser: string;
+beforeAll(async () => { await prepareDb(); }, 60_000);
+afterAll(async () => { if (quotaUser) await deleteAccount(quotaUser); await getPool().end(); });
+it("reserves per-user storage under concurrent imports", async () => {
+  const user = await makeUser("quota-test");
+  quotaUser = user.id;
+  const course = await makeCourse(user.id);
+  const input = { userId: user.id, courseId: course.id, moduleId: null, kind: "paste" as const, mime: "text/plain", originUrl: null };
+  const existing = await createSource({ ...input, title: "Existing", filename: "existing.txt", data: Buffer.from("existing material for the test") });
+  await db.update(schema.sourceDocuments).set({ sizeBytes: 512 * 1048576 - 150 }).where(eq(schema.sourceDocuments.id, existing.documentId));
+  const results = await Promise.allSettled([
+    createSource({ ...input, title: "One", filename: "one.txt", data: Buffer.from("a".repeat(100)) }),
+    createSource({ ...input, title: "Two", filename: "two.txt", data: Buffer.from("b".repeat(100)) }),
+  ]);
+  expect(results.filter((result) => result.status === "fulfilled")).toHaveLength(1);
+  const rejected = results.find((result) => result.status === "rejected");
+  expect(rejected?.status === "rejected" && rejected.reason).toMatchObject({ code: "storage_limit" });
+});
