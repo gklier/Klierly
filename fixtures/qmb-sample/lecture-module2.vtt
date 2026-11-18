@@ -1,0 +1,39 @@
+WEBVTT
+
+NOTE Synthetic sample material written for Klierly testing. It is not actual University of Florida course content.
+
+00:00:00.000 --> 00:00:19.000
+Welcome back. This is a synthetic sample lecture written for Klierly testing. Today we read a regression output table from top to bottom.
+
+00:00:20.000 --> 00:00:39.000
+Start with the summary of fit. R-square tells you the share of the variation in the response that the model explains.
+
+00:00:40.000 --> 00:00:59.000
+Right below it you will see R-square adjusted. Use the adjusted value when you compare models that have different numbers of predictors.
+
+00:01:00.000 --> 00:01:19.000
+Root mean square error is in the units of the response. Think of it as the typical size of a prediction miss.
+
+00:01:20.000 --> 00:01:39.000
+Next is the analysis of variance table. The F ratio tests whether the model as a whole is useful.
+
+00:01:40.000 --> 00:01:59.000
+The null hypothesis for the F test says that every slope is zero. A tiny probability value means at least one predictor matters.
+
+00:02:00.000 --> 00:02:19.000
+Now the parameter estimates. Each row is one term in the model: the estimate, its standard error, the t ratio and the p-value.
+
+00:02:20.000 --> 00:02:39.000
+The t ratio is simply the estimate divided by its standard error. Check it yourself with a calculator; it builds trust in the table.
+
+00:02:40.000 --> 00:02:59.000
+A p-value below five percent means the term is significant at the five percent level, given that the other terms are in the model.
+
+00:03:00.000 --> 00:03:19.000
+Remember that each estimate is a partial slope. It holds the other predictors fixed.
+
+00:03:20.000 --> 00:03:39.000
+Do not rank the importance of predictors by the size of their coefficients. The coefficients depend on the units of each variable.
+
+00:03:40.000 --> 00:03:59.000
+Finally, always look at the residual plot before you trust any of these numbers. A curved pattern or a funnel shape means the model needs work.

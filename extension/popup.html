@@ -1,0 +1,72 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <title>Klierly Capture</title>
+  <link rel="stylesheet" href="ui.css">
+</head>
+<body class="popup">
+<main>
+  <h1>Save this page to Klierly</h1>
+  <p id="status" class="muted small" role="status">Checking this page…</p>
+
+  <section id="view-discover" hidden>
+    <div class="notice">
+      <p><strong>This looks like a course site.</strong> Klierly can list the course's modules and import the pages and files you choose, instead of one page at a time.</p>
+      <button id="discover" class="primary" type="button">Discover this course</button>
+    </div>
+  </section>
+
+  <section id="view-disconnected" hidden>
+    <div class="notice">
+      <p><strong>Not connected yet.</strong> Enter your Klierly server address and a pairing token to use the extension.</p>
+      <button id="open-options" class="primary" type="button">Open extension settings</button>
+    </div>
+  </section>
+
+  <section id="view-blocked" hidden>
+    <div class="notice bad" role="alert">
+      <h2 id="blocked-title">This page was not captured</h2>
+      <ul id="blocked-reasons"></ul>
+    </div>
+    <p id="blocked-help" class="small"></p>
+  </section>
+
+  <section id="view-capture" hidden>
+    <div id="cautions" class="notice warn small" hidden></div>
+    <label for="title">Title</label>
+    <input id="title" type="text" maxlength="200">
+    <label for="preview">Text that will be imported <span id="count" class="muted" style="font-weight:400"></span></label>
+    <textarea id="preview" rows="9" readonly aria-describedby="excluded"></textarea>
+    <p id="excluded" class="muted small"></p>
+    <label class="check" id="selection-row" hidden><input id="selection-only" type="checkbox"> <span>Only the text I highlighted</span></label>
+
+    <label for="course">Course</label>
+    <select id="course"></select>
+    <label for="module">Module</label>
+    <select id="module"></select>
+
+    <div class="notice small" id="disclosure">
+      <strong>What happens when you click Import:</strong> the title, the page address and the text shown above are sent to
+      <strong id="server-host"></strong> and stored in your account there. Nothing has been sent so far. No passwords, cookies, form entries, grades or other tabs are read.
+    </div>
+    <label class="check"><input id="permission" type="checkbox"> <span>I have permission to use this material with Klierly for my own study, and this is not a graded assessment in progress.</span></label>
+    <div id="error" class="notice bad small" role="alert" hidden></div>
+    <p id="captions-row" class="small" hidden>This page has a video or an embedded player. <a href="#" id="captions-link">Import its captions or transcript</a></p>
+    <div class="row">
+      <button id="import" class="primary" type="button" disabled>Import</button>
+      <span id="import-hint" class="muted small">Tick the declaration to enable.</span>
+    </div>
+  </section>
+
+  <section id="view-done" hidden>
+    <div class="notice good" role="status">
+      <p><strong id="done-title">Imported.</strong> <span id="done-text"></span></p>
+      <p><a id="done-link" target="_blank" rel="noopener">Open it in Klierly</a></p>
+    </div>
+  </section>
+</main>
+<footer class="muted small">Not affiliated with or endorsed by any LMS or university. <a href="#" id="settings-link">Settings</a></footer>
+<script type="module" src="popup.js"></script>
+</body>
+</html>

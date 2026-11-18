@@ -1,0 +1,9 @@
+**/node_modules
+**/.next
+**/.venv
+**/.env*
+**/data
+**/test-results
+.git
+extension
+docs

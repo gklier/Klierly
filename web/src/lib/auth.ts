@@ -1,0 +1,81 @@
+import { cookies, headers } from "next/headers";
+import { redirect } from "next/navigation";
+import { and, eq, gt, lt } from "drizzle-orm";
+import { cache } from "react";
+import { db, schema } from "@/db";
+import { env } from "./env";
+import { randomToken, sha256 } from "./crypto";
+
+export const SESSION_COOKIE = "cl_session";
+const SESSION_DAYS = 30;
+
+export type AuthUser = { id: string; email: string; name: string };
+
+export async function createSession(userId: string) {
+  const token = randomToken();
+  const expiresAt = new Date(Date.now() + SESSION_DAYS * 86400_000);
+  await db.insert(schema.sessions).values({ id: sha256(token), userId, expiresAt });
+  await db.delete(schema.sessions).where(lt(schema.sessions.expiresAt, new Date()));
+  (await cookies()).set(SESSION_COOKIE, token, {
+    httpOnly: true, sameSite: "lax", secure: env.secureCookies, path: "/", expires: expiresAt,
+  });
+}
+
+export async function destroySession() {
+  const jar = await cookies();
+  const token = jar.get(SESSION_COOKIE)?.value;
+  if (token) await db.delete(schema.sessions).where(eq(schema.sessions.id, sha256(token)));
+  jar.delete(SESSION_COOKIE);
+}
+
+export async function userFromSessionToken(token: string | undefined): Promise<AuthUser | null> {
+  if (!token) return null;
+  const rows = await db
+    .select({ id: schema.users.id, email: schema.users.email, name: schema.users.name })
+    .from(schema.sessions)
+    .innerJoin(schema.users, eq(schema.users.id, schema.sessions.userId))
+    .where(and(eq(schema.sessions.id, sha256(token)), gt(schema.sessions.expiresAt, new Date())))
+    .limit(1);
+  return rows[0] ?? null;
+}
+
+export const getUser = cache(async (): Promise<AuthUser | null> => {
+  return userFromSessionToken((await cookies()).get(SESSION_COOKIE)?.value);
+});
+
+export async function requireUser(): Promise<AuthUser> {
+  const user = await getUser();
+  if (!user) redirect("/login");
+  return user;
+}
+
+/**
+ * CSRF defense for cookie-authenticated route handlers (server actions get the
+ * same check from Next.js): a state-changing request must carry an Origin that
+ * matches the host it was sent to.
+ */
+export async function sameOrigin(): Promise<boolean> {
+  const h = await headers();
+  const origin = h.get("origin");
+  if (!origin) return false;
+  try {
+    const host = h.get("x-forwarded-host") ?? h.get("host");
+    return new URL(origin).host === host;
+  } catch {
+    return false;
+  }
+}
+
+export async function userFromExtensionToken(authorization: string | null): Promise<AuthUser | null> {
+  const m = /^Bearer\s+(clx_[A-Za-z0-9_-]{20,})$/.exec(authorization ?? "");
+  if (!m) return null;
+  const rows = await db
+    .select({ id: schema.users.id, email: schema.users.email, name: schema.users.name, tokenId: schema.extensionTokens.id })
+    .from(schema.extensionTokens)
+    .innerJoin(schema.users, eq(schema.users.id, schema.extensionTokens.userId))
+    .where(eq(schema.extensionTokens.tokenHash, sha256(m[1])))
+    .limit(1);
+  if (!rows[0]) return null;
+  await db.update(schema.extensionTokens).set({ lastUsedAt: new Date() }).where(eq(schema.extensionTokens.id, rows[0].tokenId));
+  return { id: rows[0].id, email: rows[0].email, name: rows[0].name };
+}
