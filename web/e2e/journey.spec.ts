@@ -1,3 +1,4 @@
+import { enrollTestAccount } from "./passkey-helper";
 import path from "node:path";
 import { expect, test, type Page } from "@playwright/test";
 
@@ -13,15 +14,7 @@ const watch = (p: Page) => {
   p.on("pageerror", (e) => consoleErrors.push(`${p.url()} :: ${e.message}`));
 };
 
-async function register(p: Page, name: string, email: string) {
-  await p.goto("/register");
-  await p.getByLabel("Name").fill(name);
-  await p.getByLabel("Email").fill(email);
-  await p.getByLabel("Password").fill("e2e-password-12345");
-  await p.getByLabel("Invite code").fill("e2e-invite");
-  await p.getByRole("button", { name: "Create account" }).click();
-  await p.waitForURL("/");
-}
+const register = enrollTestAccount;
 
 test.describe.configure({ mode: "serial" });
 test.beforeAll(async ({ browser }) => { page = await (await browser.newContext()).newPage(); watch(page); });
@@ -44,9 +37,8 @@ test("1. health check passes and the app requires sign-in", async ({ request }) 
   await expect(page).toHaveURL(/\/login$/);
   expect((await request.get("/api/courses/00000000-0000-0000-0000-000000000000/status")).status()).toBe(401);
   await page.goto("/register");
-  await page.getByLabel("Name").fill("X"); await page.getByLabel("Email").fill("x@example.com"); await page.getByLabel("Password").fill("e2e-password-12345"); await page.getByLabel("Invite code").fill("wrong");
-  await page.getByRole("button", { name: "Create account" }).click();
-  await expect(page.locator("p[role=alert]")).toContainText("invite code is not valid");
+  await expect(page.getByRole("link", { name: "gabriel.klier@ufl.edu" })).toBeVisible();
+  await expect(page.getByLabel("Password", { exact: true })).toHaveCount(0);
 });
 
 test("2. create an account and a course", async () => {
@@ -477,13 +469,11 @@ test("15. delete a source, the course and the account", async () => {
   await expect(page.getByText("Start with your own course")).toBeVisible();
   expect((await page.goto(courseUrl))!.status()).toBe(404);
   await page.goto("/settings");
-  await page.getByLabel("Confirm with your password").fill("wrong-password");
+  await page.getByLabel("Type DELETE to confirm").fill("wrong-password");
   await page.getByRole("button", { name: "Delete my account and all data" }).click();
-  await expect(page.getByText("That password is not correct. Nothing was deleted.")).toBeVisible();
-  await page.getByLabel("Confirm with your password").fill("e2e-password-12345");
+  await expect(page.getByText("Type DELETE to confirm.")).toBeVisible();
+  await page.getByLabel("Type DELETE to confirm").fill("DELETE");
   await page.getByRole("button", { name: "Delete my account and all data" }).click();
   await page.waitForURL(/\/login$/);
-  await page.getByLabel("Email").fill("founder@e2e.test"); await page.getByLabel("Password").fill("e2e-password-12345");
-  await page.getByRole("button", { name: "Sign in" }).click();
-  await expect(page.locator("p[role=alert]")).toContainText("Email or password is incorrect.");
+  await expect(page.getByRole("button", { name: "Sign in with a passkey" })).toBeVisible();
 });

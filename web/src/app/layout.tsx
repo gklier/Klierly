@@ -1,3 +1,4 @@
+export const dynamic = "force-dynamic";
 import type { Metadata, Viewport } from "next";
 import { Instrument_Sans, Newsreader } from "next/font/google";
 import { cookies } from "next/headers";

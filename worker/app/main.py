@@ -4,6 +4,8 @@ Document contents are never logged or persisted.
 """
 from __future__ import annotations
 
+import asyncio
+import multiprocessing
 import hmac
 import os
 from typing import Any
@@ -81,6 +83,49 @@ async def health() -> dict[str, Any]:
     return {"status": "ok", "version": VERSION, "parsers": PARSER_NAMES}
 
 
+
+def _parse_child(sender, fn, args):
+    try:
+        sender.send((True, fn(*args)))
+    except WorkerError as exc:
+        sender.send((False, (exc.status, exc.code, exc.message)))
+    except Exception:
+        sender.send((False, (422, "parse_failed", "The document could not be parsed.")))
+    finally:
+        sender.close()
+
+
+def _bounded_parse_sync(fn, args):
+    context = multiprocessing.get_context("spawn")
+    receiver, sender = context.Pipe(duplex=False)
+    process = context.Process(target=_parse_child, args=(sender, fn, args))
+    try:
+        process.start()
+        sender.close()
+        if not receiver.poll(45):
+            raise WorkerError(422, "parse_timeout", "Parsing exceeded the time limit. Try a smaller document.")
+        success, result = receiver.recv()
+        if not success:
+            raise WorkerError(*result)
+        return result
+    finally:
+        receiver.close()
+        sender.close()
+        if process.pid is not None:
+            if process.is_alive():
+                process.terminate()
+            process.join(timeout=2)
+            if process.is_alive():
+                process.kill()
+                process.join()
+
+
+_parse_lock = asyncio.Semaphore(1)
+
+async def bounded_parse(fn, *args):
+    async with _parse_lock:
+        return await asyncio.to_thread(_bounded_parse_sync, fn, args)
+
 @app.post("/parse", dependencies=[Depends(require_token)])
 async def parse(request: Request) -> dict[str, Any]:
     limit = max_upload_bytes()
@@ -96,7 +141,7 @@ async def parse(request: Request) -> dict[str, Any]:
         raise WorkerError(413, "too_large", f"The file is larger than the {limit // (1024 * 1024)} MB limit.")
     override = form.get("filename")
     filename = override if isinstance(override, str) and override.strip() else (upload.filename or "")
-    return parse_bytes(filename, data)
+    return await bounded_parse(parse_bytes, filename, data)
 
 
 @app.post("/parse-text", dependencies=[Depends(require_token)])
@@ -110,7 +155,7 @@ async def parse_text(request: Request) -> dict[str, Any]:
     if len(body["text"]) > MAX_TEXT_CHARS:
         raise WorkerError(413, "too_large", "The text is too long.")
     title = body.get("title")
-    return parse_pasted(body["text"], fmt, title if isinstance(title, str) else None)
+    return await bounded_parse(parse_pasted, body["text"], fmt, title if isinstance(title, str) else None)
 
 
 @app.get("/numeric/functions", dependencies=[Depends(require_token)])

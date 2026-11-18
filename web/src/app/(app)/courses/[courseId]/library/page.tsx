@@ -17,7 +17,7 @@ export default async function LibraryPage({ params }: { params: Promise<{ course
     return (
       <div className="max-w-2xl space-y-3">
         <h1 className="text-2xl font-semibold">Class library</h1>
-        <p className="notice">This course is not linked to a class yet. Open the course in Canvas, click the Klierly extension and choose <strong>Join the class library</strong>. Only students who open the class&apos;s Canvas course can see what classmates share.</p>
+        <p className="notice">This course is not linked to a class yet. Open the course in Canvas, click the Klierly extension and choose <strong>Join the class library</strong>. An administrator must approve your membership before you can view shared summaries.</p>
         <p className="text-sm text-muted"><Link className="link" href="/terms/sharing">How sharing works</Link></p>
       </div>
     );
@@ -31,7 +31,8 @@ export default async function LibraryPage({ params }: { params: Promise<{ course
         <p className="mt-1 text-sm"><Link className="link" href="/terms/sharing">How sharing works</Link></p>
       </header>
       {!access.sharingEnabled && <p role="status" className="notice notice-warn">Sharing is turned off for this class.</p>}
-      {access.sharingEnabled && !access.active && <p role="status" className="notice notice-warn">Open this course in Canvas again with the extension to confirm you are still in the class. The library stays hidden until then.</p>}
+      {!access.approved && <p role="status" className="notice notice-warn">Your membership is awaiting administrator approval.</p>}
+      {access.approved && access.sharingEnabled && !access.active && <p role="status" className="notice notice-warn">Open this course in Canvas again with the extension to confirm you are still in the class. The library stays hidden until then.</p>}
       {access.active && access.sharingEnabled && items.length === 0 && <p className="notice">Nothing has been shared yet. Open one of your sources, create a summary, and share it to start the library.</p>}
       {modules.map((m) => (
         <section key={m}>

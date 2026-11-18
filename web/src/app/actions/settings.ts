@@ -8,7 +8,8 @@ import type { ActionState } from "@/components/forms";
 import { AiError, checkBaseUrl, getProvider, rawChat } from "@/lib/ai/provider";
 import { destroySession, requireUser } from "@/lib/auth";
 import { deleteAccount } from "@/lib/courses";
-import { decryptSecret, encryptSecret, randomToken, sha256, verifyPassword } from "@/lib/crypto";
+import { decryptSecret, encryptSecret, randomToken, sha256 } from "@/lib/crypto";
+import { requireRecentUser } from "@/lib/security";
 import { rateLimit } from "@/lib/ratelimit";
 import { logActivity } from "@/lib/activity";
 
@@ -81,9 +82,8 @@ export async function revokeExtensionToken(fd: FormData) {
 }
 
 export async function deleteAccountAction(_: ActionState, fd: FormData): Promise<ActionState> {
-  const user = await requireUser();
-  const [row] = await db.select({ hash: schema.users.passwordHash }).from(schema.users).where(eq(schema.users.id, user.id)).limit(1);
-  if (!row || !(await verifyPassword(String(fd.get("password") ?? ""), row.hash))) return { error: "That password is not correct. Nothing was deleted." };
+  const user = await requireRecentUser();
+  if (fd.get("confirm") !== "DELETE") return { error: "Type DELETE to confirm." };
   await destroySession();
   await deleteAccount(user.id);
   redirect("/login");

@@ -42,21 +42,22 @@ export async function leaveClass(userId: string, classId: string) {
   await logActivity(userId, "class.left", {});
 }
 
-export type ClassAccess = { classId: string; label: string; sharingEnabled: boolean; active: boolean };
+export type ClassAccess = { classId: string; label: string; sharingEnabled: boolean; active: boolean; approved: boolean };
 
 /** The class a course is linked to and whether this student's claim is current (the LMS course was opened recently). */
 export async function classAccessForCourse(userId: string, courseId: string): Promise<ClassAccess | null> {
-  const [row] = await db.select({ classId: schema.classSpaces.id, label: schema.classSpaces.label, sharingEnabled: schema.classSpaces.sharingEnabled, verifiedAt: schema.classMembers.verifiedAt })
+  const [row] = await db.select({ classId: schema.classSpaces.id, label: schema.classSpaces.label, sharingEnabled: schema.classSpaces.sharingEnabled, verifiedAt: schema.classMembers.verifiedAt, approved: schema.classMembers.approved })
     .from(schema.courses)
     .innerJoin(schema.classSpaces, eq(schema.classSpaces.id, schema.courses.classId))
     .innerJoin(schema.classMembers, and(eq(schema.classMembers.classId, schema.classSpaces.id), eq(schema.classMembers.userId, userId)))
     .where(and(eq(schema.courses.id, courseId), eq(schema.courses.userId, userId))).limit(1);
-  return row ? { classId: row.classId, label: row.label, sharingEnabled: row.sharingEnabled, active: membershipActive(row.verifiedAt) } : null;
+  return row ? { classId: row.classId, label: row.label, sharingEnabled: row.sharingEnabled, approved: row.approved, active: row.approved && membershipActive(row.verifiedAt) } : null;
 }
 
 async function requireActive(userId: string, courseId: string): Promise<ClassAccess> {
   const a = await classAccessForCourse(userId, courseId);
   if (!a) throw new SharingError("not_linked", "Link this course to its Canvas class first: open the course in Canvas and use “Join the class library” in the Klierly extension.");
+  if (!a.approved) throw new SharingError("approval_required", "Your class membership needs administrator approval.");
   if (!a.active) throw new SharingError("stale", "Open this course in Canvas again with the extension to confirm you are still in the class.");
   if (!a.sharingEnabled) throw new SharingError("disabled", "Sharing is turned off for this class.");
   return a;

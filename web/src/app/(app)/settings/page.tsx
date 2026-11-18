@@ -1,3 +1,4 @@
+import { PasskeyForm } from "@/components/passkey-form";
 import Link from "next/link";
 import { and, desc, eq, gte, sql } from "drizzle-orm";
 import { db, schema } from "@/db";
@@ -119,12 +120,13 @@ export default async function SettingsPage() {
         <p className="mt-2 text-sm"><Link className="link" href="/privacy">Read the privacy policy draft and exact data flows</Link></p>
       </section>
 
+      <section className="panel p-5"><h2 className="text-base font-semibold">Your passkeys</h2><p className="text-sm">Add a backup passkey. Sign in again first if your last sign-in was more than ten minutes ago.</p><PasskeyForm add /></section>
       <section className="panel p-5" aria-labelledby="del-h">
         <h2 id="del-h" className="text-base font-semibold">Delete account</h2>
         <p className="mt-1 text-sm text-muted">Permanently deletes your account, every course, all uploaded files and indexed content, your AI connection and pairing tokens. This cannot be undone.</p>
         <ActionForm action={deleteAccountAction} className="mt-3">
           <div className="flex flex-wrap items-end gap-2">
-            <div><label className="label" htmlFor="del-pw">Confirm with your password</label><input id="del-pw" name="password" type="password" className="input w-64" required autoComplete="current-password" /></div>
+            <div><label className="label" htmlFor="del-pw">Type DELETE to confirm</label><input id="del-pw" name="confirm" type="text" className="input w-64" required autoComplete="off" /></div>
             <Submit className="btn btn-danger" pendingText="Deleting…">Delete my account and all data</Submit>
           </div>
         </ActionForm>

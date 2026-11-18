@@ -1,6 +1,9 @@
+import { AccountInvitationForm } from "@/components/account-invitation-form";
+import { setAccountDisabled, approveClassMember } from "@/app/actions/accounts";
+import { asc, eq } from "drizzle-orm";
 import { notFound } from "next/navigation";
 import { sql } from "drizzle-orm";
-import { db } from "@/db";
+import { db, schema } from "@/db";
 import { classSharingSwitchAction, moderateAction } from "@/app/actions/sharing";
 import { ActionForm, Submit } from "@/components/forms";
 import { requireUser } from "@/lib/auth";
@@ -14,7 +17,11 @@ const usd = (micro: number) => `$${(micro / 1e6).toFixed(micro < 1e5 ? 4 : 2)}`;
 /** Cost and usage monitoring for the managed AI provider. Visible only to ADMIN_EMAILS. Counts only — no content. */
 export default async function AdminPage() {
   const user = await requireUser();
-  if (!env.adminEmails.includes(user.email)) notFound();
+  if (!user.isAdmin) notFound();
+  const accounts = await db.select({ id: schema.users.id, email: schema.users.email, name: schema.users.name, isAdmin: schema.users.isAdmin, disabled: schema.users.disabled }).from(schema.users).orderBy(asc(schema.users.createdAt));
+  const memberships = await db.select({ userId: schema.users.id, email: schema.users.email, classId: schema.classSpaces.id, label: schema.classSpaces.label, approved: schema.classMembers.approved })
+    .from(schema.classMembers).innerJoin(schema.users, eq(schema.users.id, schema.classMembers.userId))
+    .innerJoin(schema.classSpaces, eq(schema.classSpaces.id, schema.classMembers.classId));
   const m = env.managedAi;
   const [days, users, [month]] = await Promise.all([
     db.execute<{ day: string; requests: number; failed: number; cached: number; tokens: number; micro: number; strong: number }>(sql`
@@ -36,6 +43,28 @@ export default async function AdminPage() {
 
   return (
     <div className="space-y-6">
+      <section className="panel p-5 space-y-4">
+        <h1 className="text-2xl font-semibold">Account administration</h1>
+        <p>Review requests sent to gabriel.klier@ufl.edu. Approve the email address from the request, then reply with its private enrollment link.</p>
+        <AccountInvitationForm />
+        {accounts.map((account) => <div key={account.id} className="border-t border-line pt-4 space-y-3">
+          <p>{account.name} · {account.email} · {account.isAdmin ? "Administrator" : account.disabled ? "Disabled" : "Approved"}</p>
+          {!account.isAdmin && <>
+            {!account.disabled && <AccountInvitationForm userId={account.id} />}
+            <ActionForm action={setAccountDisabled}>
+              <input type="hidden" name="userId" value={account.id} /><input type="hidden" name="disabled" value={String(!account.disabled)} />
+              <Submit className="btn btn-sm">{account.disabled ? "Enable account" : "Disable account and revoke access"}</Submit>
+            </ActionForm>
+          </>}
+        </div>)}
+      </section>
+      <section className="panel p-5 space-y-3"><h2 className="text-lg font-semibold">Class membership approvals</h2><p className="text-sm">Verify enrollment independently before approving access to shared summaries.</p>
+        {memberships.map((member) => <ActionForm key={`${member.classId}:${member.userId}`} action={approveClassMember}>
+          <p>{member.email} · {member.label} · {member.approved ? "Approved" : "Awaiting approval"}</p>
+          <input type="hidden" name="userId" value={member.userId} /><input type="hidden" name="classId" value={member.classId} /><input type="hidden" name="approved" value={String(!member.approved)} />
+          <Submit className="btn btn-sm">{member.approved ? "Revoke membership" : "Approve verified membership"}</Submit>
+        </ActionForm>)}
+      </section>
       <div><h1 className="text-2xl font-semibold">Operator: managed AI</h1><p className="mt-1 text-muted">Requests, tokens and estimated spend for the Klierly-managed provider. No prompts, answers or course text are stored here.</p></div>
 
       {!m ? (

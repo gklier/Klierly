@@ -39,4 +39,5 @@ async function test(settings) {
   });
   $('test').addEventListener('click', async () => { const settings = read(); if (settings) { say('Testing…'); await test(settings); } });
   $('disconnect').addEventListener('click', async () => { await clearSettings(); $('token').value = ''; say('Disconnected. The saved token was removed from this browser. Revoke it in Klierly as well if you no longer need it.'); });
-})();
+  $('settings-fields').disabled = false;
+})().catch(() => say('Could not load extension settings. Reopen this page to try again.', 'bad'));

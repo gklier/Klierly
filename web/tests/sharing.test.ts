@@ -20,6 +20,7 @@ const users: Awaited<ReturnType<typeof makeUser>>[] = [];
 const ident = (id = "424242", host = "ufl.instructure.com") => parseClassIdentity({ lms: "canvas", host, externalCourseId: id, label: "ISM3004 – Fall 2026" })!;
 const ai = (model = "mock-cheap") => Object.assign(process.env, {
   MANAGED_AI_BASE_URL: `http://127.0.0.1:${PORT}/v1`, MANAGED_AI_API_KEY: MOCK_KEY, MANAGED_AI_MODEL: model,
+  MANAGED_AI_PRICE_IN_PER_MTOK: "0.5", MANAGED_AI_PRICE_OUT_PER_MTOK: "2", MANAGED_AI_GLOBAL_MONTHLY_USD: "10",
   MANAGED_AI_USER_DAILY_REQUESTS: "100", MANAGED_AI_USER_MONTHLY_TOKENS: "900000", MANAGED_AI_GLOBAL_DAILY_REQUESTS: "900",
 });
 const upload = async (userId: string, courseId: string, file: string, title = file) =>
@@ -52,6 +53,10 @@ describe("class library", () => {
     expect(a.linked).toBe(true);
     expect(new Set([a.classId, again.classId, b.classId]).size).toBe(1);
     expect(await db.select().from(schema.classMembers).where(eq(schema.classMembers.classId, a.classId))).toHaveLength(2);
+    expect((await classAccessForCourse(ann.id, annCourse))!.active).toBe(false);
+    expect((await libraryFor(ann.id, annCourse)).items).toEqual([]);
+    await db.update(schema.classMembers).set({ approved: true }).where(eq(schema.classMembers.classId, a.classId));
+    await setClassSharing(a.classId, true);
     await joinClass(cy.id, ident("999999"), cyCourse); // a different class
     expect((await classAccessForCourse(cy.id, cyCourse))!.classId).not.toBe(a.classId);
     expect((await joinClass(dee.id, ident(), "00000000-0000-0000-0000-000000000000")).linked).toBe(false); // someone else's / unknown course is never linked

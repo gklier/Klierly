@@ -39,7 +39,7 @@ export default async function CourseSettings({ params }: { params: Promise<{ cou
         <h2 className="text-base font-semibold">Class library</h2>
         {access ? (
           <>
-            <p className="mt-1 text-sm text-muted">Linked to <strong>{access.label}</strong>. {access.active ? "Your claim is current." : "Open the course in Canvas again with the extension to confirm you are still in the class."}</p>
+            <p className="mt-1 text-sm text-muted">Linked to <strong>{access.label}</strong>. {!access.approved ? "Your membership is awaiting administrator approval." : access.active ? "Your membership is approved." : "Open the course in Canvas again with the extension to confirm you are still in the class."}</p>
             <div className="mt-3 flex flex-wrap gap-2">
               <ConfirmAction action={unlinkCourseAction} hidden={{ courseId: course.id }} label="Unlink this course" confirmLabel="Unlink" description="This course stops being linked to the class. What you already shared stays until you take it down." className="btn btn-sm" />
               <ConfirmAction action={leaveClassAction} hidden={{ classId: access.classId, courseId: course.id }} label="Leave the class" confirmLabel="Leave the class" description="Everything you shared with this class is taken down and your courses are unlinked." />

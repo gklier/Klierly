@@ -1,3 +1,4 @@
+import { enrollTestAccount, approveTestMemberships, testDatabase } from "./passkey-helper";
 import path from "node:path";
 import { expect, test, type BrowserContext, type Page } from "@playwright/test";
 
@@ -11,13 +12,7 @@ async function signUp(browser: import("@playwright/test").Browser, name: string,
   const ctx = await browser.newContext();
   const page = await ctx.newPage();
   page.on("pageerror", (e) => errors.push(`${email}: ${e.message}`));
-  await page.goto("/register");
-  await page.getByLabel("Name").fill(name);
-  await page.getByLabel("Email").fill(email);
-  await page.getByLabel("Password").fill("e2e-password-12345");
-  await page.getByLabel("Invite code").fill("e2e-invite");
-  await page.getByRole("button", { name: "Create account" }).click();
-  await page.waitForURL("/");
+  await enrollTestAccount(page, name, email);
   return { ctx, page, courseId: "", token: "" };
 }
 
@@ -41,6 +36,8 @@ test.afterAll(async () => { for (const w of Object.values(people)) await w.ctx.c
 test("two students sign up with the same course name", async ({ browser }) => {
   people.sam = await signUp(browser, "Sam", "operator@e2e.test");
   people.rae = await signUp(browser, "Rae", "rae@share.test");
+  const db = await testDatabase();
+  try { await db.query("update users set is_admin=true where email='operator@e2e.test'"); } finally { await db.end(); }
   for (const k of ["sam", "rae"]) await makeCourse(people[k], "ISM3004 Business Analytics");
 });
 
@@ -55,11 +52,12 @@ test("the library is closed until the student joins through the extension, which
   expect((await call({ ...CLASS, courseId: "00000000-0000-0000-0000-000000000000" })).status()).toBe(404);
   const ok = await call({ ...CLASS, label: "Modules: ISM3004 – Fall 2026", courseId });
   expect(ok.status()).toBe(200);
-  expect(await ok.json()).toMatchObject({ label: "ISM3004 – Fall 2026", linked: true, sharingEnabled: true });
+  expect(await ok.json()).toMatchObject({ label: "ISM3004 – Fall 2026", linked: true, sharingEnabled: false });
   for (const k of ["rae"]) {
     const w = people[k];
     expect((await w.page.request.post("/api/ext/class", { headers: { Authorization: `Bearer ${w.token}` }, data: { ...CLASS, courseId: w.courseId } })).status()).toBe(200);
   }
+  await approveTestMemberships();
   await page.goto(`/courses/${courseId}/settings`);
   await expect(page.getByTestId("class-link")).toContainText("Linked to ISM3004 – Fall 2026");
 });

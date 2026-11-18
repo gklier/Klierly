@@ -8,7 +8,7 @@ import { AiError } from "@/lib/ai/provider";
 import { requireUser } from "@/lib/auth";
 import { leaveClass, moderate, reportItem, setClassSharing, SharingError, shareSummary, unlinkCourse, unshareItem } from "@/lib/classes";
 import { ownsCourse } from "@/lib/courses";
-import { env } from "@/lib/env";
+import { requireAdmin } from "@/lib/security";
 import { rateLimit } from "@/lib/ratelimit";
 
 const s = (fd: FormData, k: string) => String(fd.get(k) ?? "").trim();
@@ -86,10 +86,7 @@ export async function unlinkCourseAction(_: ActionState, fd: FormData): Promise<
   return { ok: "Unlinked." };
 }
 
-async function requireOperator() {
-  const user = await requireUser();
-  if (!env.adminEmails.includes(user.email)) throw new Error("forbidden");
-}
+const requireOperator = requireAdmin;
 
 export async function moderateAction(_: ActionState, fd: FormData): Promise<ActionState> {
   await requireOperator();

@@ -11,7 +11,9 @@ export const users = pgTable("users", {
   id: id(),
   email: text("email").notNull().unique(),
   name: text("name").notNull(),
-  passwordHash: text("password_hash").notNull(),
+  passwordHash: text("password_hash").notNull(), // Legacy data only. Password authentication is disabled.
+  isAdmin: boolean("is_admin").notNull().default(false),
+  disabled: boolean("disabled").notNull().default(false),
   createdAt: createdAt(),
 });
 
@@ -28,6 +30,7 @@ export const extensionTokens = pgTable("extension_tokens", {
   tokenHash: text("token_hash").notNull().unique(),
   label: text("label").notNull(),
   lastUsedAt: timestamp("last_used_at", { withTimezone: true }),
+  expiresAt: timestamp("expires_at", { withTimezone: true }).notNull().default(sql`now() + interval '30 days'`),
   createdAt: createdAt(),
 });
 
@@ -408,7 +411,7 @@ export const classSpaces = pgTable("class_spaces", {
   externalCourseId: text("external_course_id").notNull(),
   label: text("label").notNull(),
   /** Operator switch: turn sharing off for a class (for example when an instructor asks). */
-  sharingEnabled: boolean("sharing_enabled").notNull().default(true),
+  sharingEnabled: boolean("sharing_enabled").notNull().default(false),
   createdAt: createdAt(),
 }, (t) => [uniqueIndex("class_spaces_ident_uq").on(t.lms, t.host, t.externalCourseId)]);
 
@@ -418,6 +421,7 @@ export const classSpaces = pgTable("class_spaces", {
  * and everything shared must be safe to be seen by someone who is not really enrolled.
  */
 export const classMembers = pgTable("class_members", {
+  approved: boolean("approved").notNull().default(false),
   userId: uuid("user_id").notNull().references(() => users.id, { onDelete: "cascade" }),
   classId: uuid("class_id").notNull().references(() => classSpaces.id, { onDelete: "cascade" }),
   joinedAt: timestamp("joined_at", { withTimezone: true }).notNull().defaultNow(),

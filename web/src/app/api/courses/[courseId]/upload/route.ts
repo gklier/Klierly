@@ -1,3 +1,4 @@
+import { boundedRequest } from "@/lib/request-body";
 import { NextResponse } from "next/server";
 import { getUser, sameOrigin } from "@/lib/auth";
 import { env } from "@/lib/env";
@@ -17,7 +18,7 @@ export async function POST(req: Request, { params }: { params: Promise<{ courseI
   const declared = Number(req.headers.get("content-length") ?? 0);
   if (declared > env.maxUploadBytes + 1048576) return err(413, "too_large", `Files can be at most ${limitMb} MB.`);
   let form: FormData;
-  try { form = await req.formData(); } catch { return err(400, "invalid_request", "The upload could not be read."); }
+  try { form = await (await boundedRequest(req, env.maxUploadBytes + 1048576)).formData(); } catch { return err(413, "too_large", "The upload is too large or malformed."); }
   const file = form.get("file");
   if (!(file instanceof File)) return err(400, "invalid_request", "No file was sent.");
   if (form.get("permission") !== "yes") return err(400, "permission_required", "Confirm that you are allowed to use this material for your own study.");

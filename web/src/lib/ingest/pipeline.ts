@@ -65,6 +65,7 @@ export async function createSource(input: NewSource): Promise<{ documentId: stri
   if (!SUPPORTED_EXTENSIONS.includes(ext)) {
     throw new IngestError("unsupported_type", `Files of type "${ext || "unknown"}" are not supported. Supported: ${SUPPORTED_EXTENSIONS.join(" ")}.`, 415);
   }
+  if (input.data.length > 25 * 1048576) throw new IngestError("too_large", "Files can be at most 25 MB.", 413);
   if (input.data.length === 0) throw new IngestError("empty_document", "The file is empty.", 422);
   const digest = sha256(input.data);
   const [existing] = await db.select({ id: schema.sourceDocuments.id }).from(schema.sourceDocuments)
@@ -87,6 +88,13 @@ export async function createSource(input: NewSource): Promise<{ documentId: stri
   await saveFile(storagePath, input.data);
   try {
     const jobId = await db.transaction(async (tx) => {
+      await tx.execute(sql`select pg_advisory_xact_lock(842771)`);
+      const [usage] = await tx.execute<{ user_bytes: string; all_bytes: string }>(sql`
+        select coalesce(sum(size_bytes) filter (where user_id = ${input.userId}), 0)::text as user_bytes,
+          coalesce(sum(size_bytes), 0)::text as all_bytes from source_documents`).then((r) => r.rows);
+      if (Number(usage.user_bytes) + input.data.length > 512 * 1048576 || Number(usage.all_bytes) + input.data.length > 8 * 1024 * 1048576) {
+        throw new IngestError("storage_limit", "Storage allowance reached. Delete unused sources or contact the administrator.", 413);
+      }
       await tx.insert(schema.sourceDocuments).values({
         id: documentId, userId: input.userId, courseId: input.courseId, moduleId, externalId, externalUpdatedAt: input.externalUpdatedAt ?? null,
         title: input.title.trim().slice(0, 200) || input.filename, kind: input.kind, filename: input.filename.slice(0, 200),

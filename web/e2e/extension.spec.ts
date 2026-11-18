@@ -1,3 +1,4 @@
+import { enrollTestAccount } from "./passkey-helper";
 import { createHash, generateKeyPairSync } from "node:crypto";
 import fs from "node:fs";
 import http from "node:http";
@@ -39,10 +40,7 @@ test.beforeAll(async ({ browser }) => {
 
   // A real account, course, module and pairing token in the web app.
   app = await (await browser.newContext()).newPage();
-  await app.goto("/register");
-  await app.getByLabel("Name").fill("Ext Tester"); await app.getByLabel("Email").fill("ext@e2e.test"); await app.getByLabel("Password").fill("e2e-password-12345"); await app.getByLabel("Invite code").fill("e2e-invite");
-  await app.getByRole("button", { name: "Create account" }).click();
-  await app.waitForURL("/");
+  await enrollTestAccount(app, "Ext Tester", "ext@e2e.test");
   await app.goto("/courses/new");
   await app.getByLabel("Course name").fill("Extension test course");
   await app.getByRole("button", { name: "Create course" }).click();

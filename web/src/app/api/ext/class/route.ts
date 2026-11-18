@@ -1,3 +1,4 @@
+import { boundedRequest } from "@/lib/request-body";
 import { NextResponse } from "next/server";
 import { userFromExtensionToken } from "@/lib/auth";
 import { joinClass } from "@/lib/classes";
@@ -17,7 +18,7 @@ export async function POST(req: Request) {
   const user = await userFromExtensionToken(req.headers.get("authorization"));
   if (!user) return extError(req, 401, "invalid_token", "The pairing token is missing or no longer valid. Create a new one in Klierly → Settings → Browser extension.");
   if (!rateLimit(`extclass:${user.id}`, 30, 600_000).ok) return extError(req, 429, "rate_limited", "Too many requests. Try again in a few minutes.");
-  const body = (await req.json().catch(() => null)) as Record<string, unknown> | null;
+  const body = (await (await boundedRequest(req, 1_610_000)).json().catch(() => null)) as Record<string, unknown> | null;
   const ident = parseClassIdentity({ ...body, label: typeof body?.label === "string" ? courseNameFromTitle(body.label) : undefined });
   if (!ident) return extError(req, 400, "bad_class", "That does not look like a Canvas course page.");
   if (body?.termsAccepted !== true) return extError(req, 400, "terms_required", "Accept the sharing terms before joining a class library.");

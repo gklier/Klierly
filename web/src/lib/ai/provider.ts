@@ -4,6 +4,7 @@ import { decryptSecret, sha256 } from "@/lib/crypto";
 import { env } from "@/lib/env";
 import { log } from "@/lib/log";
 import { rateLimit } from "@/lib/ratelimit";
+import { boundedRequest } from "@/lib/request-body";
 import { logActivity } from "@/lib/activity";
 
 export class AiError extends Error {
@@ -14,17 +15,24 @@ export class AiError extends Error {
 
 export type ProviderConfig = { baseUrl: string; model: string; apiKey: string };
 
-const PRIVATE_HOST = /^(localhost|127\.|10\.|192\.168\.|172\.(1[6-9]|2\d|3[01])\.|169\.254\.|0\.0\.0\.0|\[?::1\]?|\[?f[cd][0-9a-f]{2}:)|\.local$|\.internal$/i;
+// Hosted installations use fixed, reviewed API origins. Local/self-hosted custom
+// providers require an explicit operator setting and must never be exposed publicly.
+const APPROVED_PROVIDERS = new Map([
+  ["https://api.openai.com", "/v1"],
+  ["https://generativelanguage.googleapis.com", "/v1beta/openai"],
+  ["https://api.ai.it.ufl.edu", "/v1"],
+  ["https://api.navigator.ai.ufl.edu", "/v1"],
+]);
 
-/** Validate a user-supplied endpoint before the server ever calls it. */
 export function checkBaseUrl(raw: string): { ok: true; url: string } | { ok: false; message: string } {
   let u: URL;
-  try { u = new URL(raw.trim()); } catch { return { ok: false, message: "Enter a full URL such as https://api.example.com/v1." }; }
-  if (u.username || u.password) return { ok: false, message: "Do not put credentials in the URL." };
-  const isPrivate = PRIVATE_HOST.test(u.hostname);
-  if (isPrivate && !env.allowPrivateAiEndpoints) return { ok: false, message: "Endpoints on localhost or private networks are disabled on this server." };
-  if (u.protocol !== "https:" && !(u.protocol === "http:" && isPrivate)) return { ok: false, message: "Use an https:// endpoint (http:// is only allowed for localhost or private networks)." };
-  return { ok: true, url: u.toString().replace(/\/+$/, "") };
+  try { u = new URL(raw.trim()); } catch { return { ok: false, message: "Enter the provider's API base URL." }; }
+  const path = u.pathname.replace(/\/+$/, "");
+  const safe = !u.username && !u.password && !u.search && !u.hash && APPROVED_PROVIDERS.get(u.origin) === path;
+  const local = process.env.ALLOW_PRIVATE_AI_ENDPOINTS === "true" && new URL(env.appUrl).protocol === "http:" && new URL(env.appUrl).hostname === "localhost" &&
+    ["localhost", "127.0.0.1"].includes(u.hostname) && ["http:", "https:"].includes(u.protocol) && !u.username && !u.password && !u.search && !u.hash;
+  if (!safe && !local) return { ok: false, message: "Use an approved OpenAI, Google AI Studio, or UF NaviGator API address." };
+  return { ok: true, url: `${u.origin}${path}` };
 }
 
 export async function getProvider(userId: string) {
@@ -102,7 +110,7 @@ type ChatResult = { content: string; promptTokens: number | null; completionToke
 /** One OpenAI-compatible chat completion. Never logs prompts, outputs or keys. */
 export async function rawChat(cfg: ProviderConfig, messages: { role: "system" | "user"; content: string }[], opts: { json?: boolean; maxTokens?: number; timeoutMs?: number; trusted?: boolean } = {}): Promise<ChatResult> {
   // `trusted` is only for the operator-configured managed endpoint; user-supplied URLs are always checked.
-  const checked = opts.trusted ? { ok: true as const, url: cfg.baseUrl.replace(/\/+$/, "") } : checkBaseUrl(cfg.baseUrl);
+  const checked = checkBaseUrl(cfg.baseUrl);
   if (!checked.ok) throw new AiError("blocked_endpoint", checked.message);
   const send = async (withFormat: boolean) => fetch(`${checked.url}/chat/completions`, {
     method: "POST",
@@ -127,7 +135,10 @@ export async function rawChat(cfg: ProviderConfig, messages: { role: "system" | 
   if (res.status === 404) throw new AiError("provider_error", "The AI provider did not recognise the endpoint or model (404). Check the base URL and model ID.");
   if (res.status === 429) throw new AiError("rate_limited", "The AI provider is rate-limiting requests or the quota is used up. Try again later.");
   if (!res.ok) throw new AiError("provider_error", `The AI provider returned an error (${res.status}).`);
-  const body = (await res.json().catch(() => null)) as { choices?: { message?: { content?: unknown } }[]; usage?: { prompt_tokens?: number; completion_tokens?: number } } | null;
+  const body = (await (async () => {
+    const bounded = await boundedRequest(new Request("https://provider.invalid/response", { method: "POST", body: res.body, duplex: "half" } as RequestInit), 2_000_000);
+    return bounded.json();
+  })().catch(() => null)) as { choices?: { message?: { content?: unknown } }[]; usage?: { prompt_tokens?: number; completion_tokens?: number } } | null;
   const content = body?.choices?.[0]?.message?.content;
   if (typeof content !== "string" || !content.trim()) throw new AiError("bad_output", "The AI provider returned an empty response.");
   return { content, promptTokens: body?.usage?.prompt_tokens ?? null, completionTokens: body?.usage?.completion_tokens ?? null };
@@ -167,19 +178,43 @@ export async function chatJson(userId: string, purpose: string, system: string, 
   if (!rl.ok) throw new AiError("rate_limited", `Too many AI requests at once. Try again in ${rl.retryAfterSec}s.`);
   // Cap the response size on the managed provider so one request cannot burn the shared budget.
   const maxTokens = status.kind === "managed" ? Math.min(opts.maxTokens ?? 3000, 3000) : opts.maxTokens;
+  const reservedInput = Math.max(1, (system + user).length * 4);
+  const reservedOutput = maxTokens ?? 4000;
+  const price = m && status.kind === "managed" ? m.price[tier] : null;
+  const reservedCost = price ? Math.ceil(reservedInput * price.in + reservedOutput * price.out) : 0;
+  const usageId = await db.transaction(async (tx) => {
+    await tx.execute(sql`select pg_advisory_xact_lock(842772)`);
+    const [usage] = await tx.execute<{ user_day: string; global_day: string; user_tokens: string; global_cost: string }>(sql`
+      select count(*) filter (where user_id = ${userId} and created_at >= ${startOfDay()})::text as user_day,
+        count(*) filter (where created_at >= ${startOfDay()})::text as global_day,
+        coalesce(sum(coalesce(prompt_tokens,0) + coalesce(completion_tokens,0)) filter (where user_id = ${userId}),0)::text as user_tokens,
+        coalesce(sum(cost_micro_usd),0)::text as global_cost
+      from ai_usage where provider = ${status.kind} and not cached and created_at >= ${startOfMonth()}`).then((r) => r.rows);
+    if (status.kind === "byok" && Number(usage.user_day) >= own!.dailyRequestLimit) throw new AiError("limit_reached", "Today's provider allowance is used up.");
+    if (status.kind === "managed" && m) {
+      if (price!.in <= 0 || price!.out <= 0 || m.globalMonthlyUsd <= 0) throw new AiError("limit_reached", "The operator must configure model prices and a positive budget before enabling managed AI.");
+      if (Number(usage.user_day) >= m.userDailyRequests || Number(usage.global_day) >= m.globalDailyRequests ||
+          Number(usage.user_tokens) + reservedInput + reservedOutput > m.userMonthlyTokens ||
+          Number(usage.global_cost) + reservedCost > m.globalMonthlyUsd * 1e6) {
+        throw new AiError("limit_reached", "The AI allowance cannot cover this request. Try again after it resets.");
+      }
+    }
+    const [row] = await tx.insert(schema.aiUsage).values({ ...usageBase, promptTokens: reservedInput, completionTokens: reservedOutput, costMicroUsd: reservedCost, ok: false }).returning({ id: schema.aiUsage.id });
+    return row.id;
+  });
   try {
     const out = await rawChat(cfg, [{ role: "system", content: system }, { role: "user", content: user }], { json: true, maxTokens, trusted: status.kind === "managed" });
     const parsed = extractJson(out.content);
     const promptTokens = out.promptTokens ?? estimateTokens(system + user), completionTokens = out.completionTokens ?? estimateTokens(out.content);
-    const price = m && status.kind === "managed" ? m.price[tier] : null;
     const costMicroUsd = price ? Math.round(promptTokens * price.in + completionTokens * price.out) : 0;
-    await db.insert(schema.aiUsage).values({ ...usageBase, promptTokens, completionTokens, ok: true, costMicroUsd });
+    await db.update(schema.aiUsage).set({ promptTokens, completionTokens, ok: true, costMicroUsd }).where(eq(schema.aiUsage.id, usageId));
     await logActivity(userId, "ai.call", { details: { purpose, provider: status.kind, tier, model: cfg.model, ok: true, inTok: promptTokens, outTok: completionTokens, costMicro: costMicroUsd } });
     if (opts.cache) await db.insert(schema.aiCache).values({ key: cacheKey, userId, response: parsed as object }).onConflictDoNothing();
     return parsed;
   } catch (e) {
     // Failed calls still count as requests, so a broken loop cannot hammer the provider for free.
-    await db.insert(schema.aiUsage).values({ ...usageBase, promptTokens: estimateTokens(system + user), completionTokens: 0, ok: false });
+    // Keep the conservative reservation after an ambiguous provider failure.
+    await db.update(schema.aiUsage).set({ ok: false }).where(eq(schema.aiUsage.id, usageId));
     log("warn", "ai.call_failed", { purpose, provider: status.kind, code: e instanceof AiError ? e.code : "unexpected" });
     await logActivity(userId, "ai.call", { details: { purpose, provider: status.kind, tier, model: cfg.model, ok: false, code: e instanceof AiError ? e.code : "unexpected" } });
     throw e;

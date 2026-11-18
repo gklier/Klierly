@@ -1,3 +1,4 @@
+import { boundedRequest } from "@/lib/request-body";
 import { NextResponse } from "next/server";
 import { userFromExtensionToken } from "@/lib/auth";
 import { env } from "@/lib/env";
@@ -17,7 +18,7 @@ export async function POST(req: Request) {
   const limitMb = Math.round(env.maxUploadBytes / 1048576);
   if (Number(req.headers.get("content-length") ?? 0) > env.maxUploadBytes + 1048576) return extError(req, 413, "too_large", `Files can be at most ${limitMb} MB.`);
   let form: FormData;
-  try { form = await req.formData(); } catch { return extError(req, 400, "invalid_request", "The upload could not be read."); }
+  try { form = await (await boundedRequest(req, env.maxUploadBytes + 1048576)).formData(); } catch { return extError(req, 413, "too_large", "The upload is too large or malformed."); }
   const file = form.get("file");
   const field = (k: string) => { const v = form.get(k); return typeof v === "string" ? v.trim() : ""; };
   if (!(file instanceof File)) return extError(req, 400, "invalid_request", "No file was sent.");

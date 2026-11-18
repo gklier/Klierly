@@ -1,3 +1,4 @@
+import { enrollTestAccount } from "./passkey-helper";
 import { createHash, generateKeyPairSync } from "node:crypto";
 import fs from "node:fs";
 import os from "node:os";
@@ -25,10 +26,7 @@ test.describe.configure({ mode: "serial" });
 test.beforeAll(async ({ browser }) => {
   canvas = await startMockCanvas(3300);
   app = await (await browser.newContext()).newPage();
-  await app.goto("/register");
-  await app.getByLabel("Name").fill("Discovery Tester"); await app.getByLabel("Email").fill("discover@e2e.test"); await app.getByLabel("Password").fill("e2e-password-12345"); await app.getByLabel("Invite code").fill("e2e-invite");
-  await app.getByRole("button", { name: "Create account" }).click();
-  await app.waitForURL("/");
+  await enrollTestAccount(app, "Discovery Tester", "discover@e2e.test");
   await app.goto("/courses/new");
   await app.getByLabel("Course name").fill("QMB 3250 – discovery test");
   await app.getByRole("button", { name: "Create course" }).click();
@@ -343,10 +341,7 @@ test("server: inventory endpoint needs the pairing token and is scoped to the ow
   expect((await request.get(`/api/ext/courses/${courseId}/sources`)).status()).toBe(401);
 
   const other = await (await browser.newContext()).newPage();
-  await other.goto("/register");
-  await other.getByLabel("Name").fill("Someone Else"); await other.getByLabel("Email").fill("else@e2e.test"); await other.getByLabel("Password").fill("e2e-password-12345"); await other.getByLabel("Invite code").fill("e2e-invite");
-  await other.getByRole("button", { name: "Create account" }).click();
-  await other.waitForURL("/");
+  await enrollTestAccount(other, "Someone Else", "else@e2e.test");
   await other.goto("/settings");
   await other.getByRole("button", { name: "Create pairing token" }).click();
   const otherAuth = { Authorization: `Bearer ${await other.getByTestId("ext-token").innerText()}` };

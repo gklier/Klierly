@@ -1,3 +1,4 @@
+import { boundedRequest } from "@/lib/request-body";
 import { NextResponse } from "next/server";
 import { userFromExtensionToken } from "@/lib/auth";
 import { env } from "@/lib/env";
@@ -18,7 +19,7 @@ export async function POST(req: Request) {
   if (!rateLimit(`ext-import:${user.id}`, 400, 600_000).ok) return extError(req, 429, "rate_limited", "Too many imports in a short time. Try again in a few minutes.");
   if (Number(req.headers.get("content-length") ?? 0) > MAX_PASTE_CHARS * 4 + 10_000) return extError(req, 413, "too_large", "The captured page is too long to import at once.");
   let body: Record<string, unknown>;
-  try { body = (await req.json()) as Record<string, unknown>; } catch { return extError(req, 400, "invalid_request", "The request was not valid JSON."); }
+  try { body = (await (await boundedRequest(req, 1_610_000)).json()) as Record<string, unknown>; } catch { return extError(req, 400, "invalid_request", "The request was not valid JSON."); }
   if (body.permissionConfirmed !== true) return extError(req, 400, "permission_required", "Confirm that you are allowed to use this material before importing.");
   const text = typeof body.text === "string" ? body.text : "";
   if (text.trim().length < 20) return extError(req, 400, "empty_capture", "The page had no readable text to import.");

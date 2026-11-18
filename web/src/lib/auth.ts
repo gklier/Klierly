@@ -7,9 +7,9 @@ import { env } from "./env";
 import { randomToken, sha256 } from "./crypto";
 
 export const SESSION_COOKIE = "cl_session";
-const SESSION_DAYS = 30;
+const SESSION_DAYS = 7;
 
-export type AuthUser = { id: string; email: string; name: string };
+export type AuthUser = { id: string; email: string; name: string; isAdmin: boolean };
 
 export async function createSession(userId: string) {
   const token = randomToken();
@@ -31,10 +31,10 @@ export async function destroySession() {
 export async function userFromSessionToken(token: string | undefined): Promise<AuthUser | null> {
   if (!token) return null;
   const rows = await db
-    .select({ id: schema.users.id, email: schema.users.email, name: schema.users.name })
+    .select({ id: schema.users.id, email: schema.users.email, name: schema.users.name, isAdmin: schema.users.isAdmin })
     .from(schema.sessions)
     .innerJoin(schema.users, eq(schema.users.id, schema.sessions.userId))
-    .where(and(eq(schema.sessions.id, sha256(token)), gt(schema.sessions.expiresAt, new Date())))
+    .where(and(eq(schema.sessions.id, sha256(token)), gt(schema.sessions.expiresAt, new Date()), eq(schema.users.disabled, false)))
     .limit(1);
   return rows[0] ?? null;
 }
@@ -59,8 +59,7 @@ export async function sameOrigin(): Promise<boolean> {
   const origin = h.get("origin");
   if (!origin) return false;
   try {
-    const host = h.get("x-forwarded-host") ?? h.get("host");
-    return new URL(origin).host === host;
+    return new URL(origin).origin === new URL(env.appUrl).origin;
   } catch {
     return false;
   }
@@ -70,12 +69,12 @@ export async function userFromExtensionToken(authorization: string | null): Prom
   const m = /^Bearer\s+(clx_[A-Za-z0-9_-]{20,})$/.exec(authorization ?? "");
   if (!m) return null;
   const rows = await db
-    .select({ id: schema.users.id, email: schema.users.email, name: schema.users.name, tokenId: schema.extensionTokens.id })
+    .select({ id: schema.users.id, email: schema.users.email, name: schema.users.name, isAdmin: schema.users.isAdmin, tokenId: schema.extensionTokens.id })
     .from(schema.extensionTokens)
     .innerJoin(schema.users, eq(schema.users.id, schema.extensionTokens.userId))
-    .where(eq(schema.extensionTokens.tokenHash, sha256(m[1])))
+    .where(and(eq(schema.extensionTokens.tokenHash, sha256(m[1])), gt(schema.extensionTokens.expiresAt, new Date()), eq(schema.users.disabled, false)))
     .limit(1);
   if (!rows[0]) return null;
   await db.update(schema.extensionTokens).set({ lastUsedAt: new Date() }).where(eq(schema.extensionTokens.id, rows[0].tokenId));
-  return { id: rows[0].id, email: rows[0].email, name: rows[0].name };
+  return { id: rows[0].id, email: rows[0].email, name: rows[0].name, isAdmin: rows[0].isAdmin };
 }

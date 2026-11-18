@@ -3,6 +3,8 @@
 # worker are on an internal network with no published ports.
 services:
   db:
+    mem_limit: 1g
+    pids_limit: 128
     image: postgres:16
     restart: unless-stopped
     environment:
@@ -19,6 +21,9 @@ services:
     networks: [internal]
 
   worker:
+    mem_limit: 1g
+    cpus: 1.5
+    pids_limit: 128
     build: ./worker
     restart: unless-stopped
     environment:
@@ -31,6 +36,9 @@ services:
     networks: [internal]
 
   web:
+    mem_limit: 2g
+    cpus: 1.5
+    pids_limit: 256
     build:
       context: .
       dockerfile: web/Dockerfile
@@ -47,7 +55,7 @@ services:
       MAX_UPLOAD_MB: ${MAX_UPLOAD_MB:-25}
       INVITE_CODE: ${INVITE_CODE:-}
       TZ: ${TZ:-America/New_York}
-      ADMIN_EMAILS: ${ADMIN_EMAILS:-}
+      TRUST_CLOUDFLARE: ${TRUST_CLOUDFLARE:-false}
       MANAGED_AI_BASE_URL: ${MANAGED_AI_BASE_URL:-}
       MANAGED_AI_API_KEY: ${MANAGED_AI_API_KEY:-}
       MANAGED_AI_MODEL: ${MANAGED_AI_MODEL:-}
