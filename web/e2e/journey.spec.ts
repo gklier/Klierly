@@ -176,15 +176,15 @@ test("8. generate source-grounded questions and a study note without entering a 
 test("8b. optional own provider: a bad key fails transparently, a good one connects and takes over, removing it returns to the included AI", async () => {
   await page.goto("/settings");
   // UF NaviGator preset: address and example model from UF's quickstart; the key is never prefilled.
-  await page.getByLabel("Type").selectOption("navigator-experimental");
+  await page.getByLabel("Type", { exact: true }).selectOption("navigator-experimental");
   await expect(page.getByLabel("Base URL")).toHaveValue("https://api.ai.it.ufl.edu/v1");
   await expect(page.getByLabel("Model ID")).toHaveValue("llama-3.1-8b-instruct");
   await expect(page.getByLabel("API key")).toHaveValue("");
-  await page.getByLabel("Type").selectOption("google-ai-studio");
+  await page.getByLabel("Type", { exact: true }).selectOption("google-ai-studio");
   await expect(page.getByLabel("Base URL")).toHaveValue("https://generativelanguage.googleapis.com/v1beta/openai"); // replaced the NaviGator address
   await expect(page.getByLabel("Model ID")).toHaveValue(""); // model names change, so the student copies one from AI Studio
   await expect(page.getByText("On the paid tier it does not use prompts or responses")).toBeVisible();
-  await page.getByLabel("Type").selectOption("openai-compatible");
+  await page.getByLabel("Type", { exact: true }).selectOption("openai-compatible");
   await expect(page.getByLabel("Base URL")).toHaveValue("");
   await page.getByLabel("Base URL").fill("http://127.0.0.1:4012/v1");
   await page.getByLabel("Model ID").fill("mock-1");

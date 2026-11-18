@@ -14,7 +14,7 @@ import { randomToken, sha256 } from "@/lib/crypto";
 import { env } from "@/lib/env";
 import { clientIdentity, consumeLimit, currentSessionId, passkeySite, requireRecentUser } from "@/lib/security";
 
-const CHALLENGE_COOKIE = "cl_webauthn";
+const CHALLENGE_COOKIE = env.secureCookies ? "__Host-cl_webauthn" : "cl_webauthn";
 const invalid = () => new Error("The passkey request expired or could not be verified. Please start again.");
 
 async function begin() {

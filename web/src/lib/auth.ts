@@ -6,7 +6,7 @@ import { db, schema, type Tx } from "@/db";
 import { env } from "./env";
 import { randomToken, sha256 } from "./crypto";
 
-export const SESSION_COOKIE = "cl_session";
+export const SESSION_COOKIE = env.secureCookies ? "__Host-cl_session" : "cl_session";
 const SESSION_DAYS = 7;
 
 export type AuthUser = { id: string; email: string; name: string; isAdmin: boolean };

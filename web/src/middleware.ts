@@ -16,7 +16,7 @@ export function middleware(req: NextRequest) {
   forwarded.set("Content-Security-Policy", csp);
   const { pathname } = req.nextUrl;
   let response: NextResponse;
-  if (PUBLIC.some((p) => p.test(pathname)) || req.cookies.has("cl_session")) {
+  if (PUBLIC.some((p) => p.test(pathname)) || (req.cookies.has("__Host-cl_session") || req.cookies.has("cl_session"))) {
     response = NextResponse.next({ request: { headers: forwarded } });
   } else if (pathname.startsWith("/api/")) {
     response = NextResponse.json({ error: { code: "unauthorized", message: "Sign in first." } }, { status: 401 });
