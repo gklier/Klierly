@@ -57,7 +57,9 @@ describe("class library", () => {
     expect((await libraryFor(ann.id, annCourse)).items).toEqual([]);
     await db.update(schema.classMembers).set({ approved: true }).where(eq(schema.classMembers.classId, a.classId));
     await setClassSharing(a.classId, true);
-    await joinClass(cy.id, ident("999999"), cyCourse); // a different class
+    const cyClass = await joinClass(cy.id, ident("999999"), cyCourse);
+    await db.update(schema.classMembers).set({ approved: true }).where(eq(schema.classMembers.classId, cyClass.classId));
+    await setClassSharing(cyClass.classId, true); // a different class
     expect((await classAccessForCourse(cy.id, cyCourse))!.classId).not.toBe(a.classId);
     expect((await joinClass(dee.id, ident(), "00000000-0000-0000-0000-000000000000")).linked).toBe(false); // someone else's / unknown course is never linked
     expect(await classAccessForCourse(dee.id, deeCourse)).toBeNull();
@@ -128,6 +130,7 @@ describe("class library", () => {
     expect(await reportItem(ben.id, benCourse, itemId, "again")).toEqual({ hidden: false }); // same person twice is one report
     const eve = await student("eve"); const eveCourse = (await makeCourse(eve.id, "ISM3004")).id;
     await joinClass(eve.id, ident(), eveCourse);
+    await db.update(schema.classMembers).set({ approved: true }).where(eq(schema.classMembers.userId, eve.id));
     expect(await reportItem(eve.id, eveCourse, itemId, "exam content")).toEqual({ hidden: true });
     expect((await libraryFor(ben.id, benCourse)).items).toHaveLength(0);
     await moderate(itemId, "restore");
@@ -156,6 +159,7 @@ describe("class library", () => {
     expect(await classAccessForCourse(ann.id, annCourse)).toBeNull();
     await rejects(shareSummary(ann.id, annCourse, annDoc), "not_linked");
     await joinClass(ann.id, ident(), annCourse);
+    await db.update(schema.classMembers).set({ approved: true }).where(eq(schema.classMembers.userId, ann.id));
     const second = await shareSummary(ann.id, annCourse, annDoc);
     await deleteAccount(ann.id);
     expect(await db.select().from(schema.sharedItems).where(eq(schema.sharedItems.id, second))).toHaveLength(0);

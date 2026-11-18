@@ -1,6 +1,7 @@
 "use client";
 
 import { useActionState, useEffect, useRef, useState } from "react";
+import { PasskeyApprovalForm } from "./passkey-approval-form";
 import { useFormStatus } from "react-dom";
 
 export type ActionState = { error?: string; ok?: string } | null;
@@ -17,18 +18,18 @@ export function Submit({ children, className = "btn btn-primary", pendingText, d
 }
 
 /** A form bound to a server action that reports `{ error }` or `{ ok }` inline. */
-export function ActionForm({ action, children, className, resetOnOk }: { action: Action; children: React.ReactNode; className?: string; resetOnOk?: boolean }) {
+export function ActionForm({ action, children, className, resetOnOk, stepUp }: { action: Action; children: React.ReactNode; className?: string; resetOnOk?: boolean; stepUp?: string }) {
   const [state, formAction] = useActionState(action, null);
   const ref = useRef<HTMLFormElement>(null);
   useEffect(() => { if (state?.ok && resetOnOk) ref.current?.reset(); }, [state, resetOnOk]);
   return (
-    <form ref={ref} action={formAction} className={className}>
+    <PasskeyApprovalForm formRef={ref} action={formAction} className={className} scope={stepUp}>
       {children}
       <div aria-live="polite">
         {state?.error && <p role="alert" className="notice notice-bad mt-3">{state.error}</p>}
         {state?.ok && <p className="notice notice-good mt-3">{state.ok}</p>}
       </div>
-    </form>
+    </PasskeyApprovalForm>
   );
 }
 

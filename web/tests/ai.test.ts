@@ -120,7 +120,7 @@ describe("prompt-injection handling", () => {
 
 describe("provider safety", () => {
   it("validates endpoints", () => {
-    expect(checkBaseUrl("https://api.example.com/v1/")).toEqual({ ok: true, url: "https://api.example.com/v1" });
+    expect(checkBaseUrl("https://api.openai.com/v1/")).toEqual({ ok: true, url: "https://api.openai.com/v1" });
     expect(checkBaseUrl("http://localhost:4010/v1").ok).toBe(true); // private allowed in tests
     expect(checkBaseUrl("http://api.example.com/v1").ok).toBe(false);
     expect(checkBaseUrl("ftp://example.com").ok).toBe(false);

@@ -2,7 +2,7 @@ import { PasskeyForm } from "@/components/passkey-form";
 import Link from "next/link";
 import { and, desc, eq, gte, sql } from "drizzle-orm";
 import { db, schema } from "@/db";
-import { deleteAccountAction, removeProvider, revokeExtensionToken, saveProvider, testProvider } from "@/app/actions/settings";
+import { deleteAccountAction, removePasskeyAction, removeProvider, revokeExtensionToken, saveProvider, testProvider } from "@/app/actions/settings";
 import { ActionForm, Submit } from "@/components/forms";
 import { PresetSelect } from "@/components/preset-select";
 import { TokenForm } from "@/components/token-form";
@@ -14,6 +14,7 @@ export const metadata = { title: "Settings" };
 
 export default async function SettingsPage() {
   const user = await requireUser();
+  const passkeys = await db.select().from(schema.passkeys).where(eq(schema.passkeys.userId, user.id));
   const since = new Date(Date.now() - 30 * 86400_000);
   const [provider, used, ai, [month], tokens] = await Promise.all([
     getProvider(user.id), usageToday(user.id), aiStatus(user.id),
@@ -120,11 +121,16 @@ export default async function SettingsPage() {
         <p className="mt-2 text-sm"><Link className="link" href="/privacy">Read the privacy policy draft and exact data flows</Link></p>
       </section>
 
-      <section className="panel p-5"><h2 className="text-base font-semibold">Your passkeys</h2><p className="text-sm">Add a backup passkey. Sign in again first if your last sign-in was more than ten minutes ago.</p><PasskeyForm add /></section>
+      <section className="panel p-5"><h2 className="text-base font-semibold">Your passkeys</h2><p className="text-sm">Add a backup passkey. Sign in again first if your last sign-in was more than ten minutes ago.</p><PasskeyForm add />
+        <ul className="mt-4 space-y-3">{passkeys.map((key) => <li key={key.id}>
+          <p>{key.name} · Added {key.createdAt.toLocaleDateString("en-US", { timeZone: "UTC" })}</p>
+          {passkeys.length > 1 && <ActionForm action={removePasskeyAction} stepUp="passkey-remove"><input name="passkeyId" type="hidden" value={key.id} /><Submit className="btn btn-sm">Revoke this passkey and sign out all devices</Submit></ActionForm>}
+        </li>)}</ul>
+      </section>
       <section className="panel p-5" aria-labelledby="del-h">
         <h2 id="del-h" className="text-base font-semibold">Delete account</h2>
         <p className="mt-1 text-sm text-muted">Permanently deletes your account, every course, all uploaded files and indexed content, your AI connection and pairing tokens. This cannot be undone.</p>
-        <ActionForm action={deleteAccountAction} className="mt-3">
+        <ActionForm stepUp="account-delete" action={deleteAccountAction} className="mt-3">
           <div className="flex flex-wrap items-end gap-2">
             <div><label className="label" htmlFor="del-pw">Type DELETE to confirm</label><input id="del-pw" name="confirm" type="text" className="input w-64" required autoComplete="off" /></div>
             <Submit className="btn btn-danger" pendingText="Deleting…">Delete my account and all data</Submit>

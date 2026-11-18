@@ -1,10 +1,11 @@
 "use client";
+import { PasskeyApprovalForm } from "./passkey-approval-form";
 import { useActionState } from "react";
 import { approveAccount, recoverAccount, type AccountState } from "@/app/actions/accounts";
 
 export function AccountInvitationForm({ userId }: { userId?: string }) {
   const [state, action, pending] = useActionState<AccountState, FormData>(userId ? recoverAccount : approveAccount, {});
-  return <form action={action} className="space-y-3">
+  return <PasskeyApprovalForm scope="admin" action={action} className="space-y-3">
     {userId ? <>
       <input name="userId" type="hidden" value={userId} />
       <label className="text-sm"><input type="checkbox" name="verified" required /> I verified this request through the approved email address. Revoke existing passkeys and issue a new enrollment link.</label>
@@ -16,5 +17,5 @@ export function AccountInvitationForm({ userId }: { userId?: string }) {
     {state?.error && <p role="alert">{state.error}</p>}
     {state?.ok && <p role="status">{state.ok}</p>}
     {state?.enrollmentUrl && <input className="input" aria-label="Private enrollment link" readOnly value={state.enrollmentUrl} onFocus={(e) => e.target.select()} />}
-  </form>;
+  </PasskeyApprovalForm>;
 }

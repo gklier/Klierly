@@ -6,7 +6,7 @@ The public site uses passkeys with user verification required. Accounts are appr
 
 Sign in with the administrator passkey, open Admin, and approve the name and email from the received request. Reply to that email with the generated enrollment link. The link expires after 24 hours, is stored only as a hash, and works once. It authorizes account setup, so send it only to the approved address.
 
-Administrative writes, adding passkeys, and account deletion require a passkey sign-in within the last ten minutes. Sign out and sign back in when prompted. Add a backup passkey in Settings.
+Administrative writes, adding passkeys, creating extension tokens, and account deletion require a fresh passkey assertion for the specific operation. Confirmations are session-bound, expire after thirty seconds, and work once. Add a backup passkey in Settings.
 
 Disable account revokes sessions, extension tokens, pending challenges and enrollment links. Recovery revokes old passkeys and access, then issues a new enrollment link. Independently verify requests before issuing recovery. Browser access alone does not verify enrollment in a class. Approve class membership manually and enable class sharing only after checking enrollment.
 

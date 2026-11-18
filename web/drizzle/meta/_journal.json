@@ -43,6 +43,13 @@
       "when": 1794968874266,
       "tag": "0005_passkey_security",
       "breakpoints": true
+    },
+    {
+      "idx": 6,
+      "version": "7",
+      "when": 1794969736193,
+      "tag": "0006_lazy_slipstream",
+      "breakpoints": true
     }
   ]
 }

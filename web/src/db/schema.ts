@@ -18,6 +18,8 @@ export const users = pgTable("users", {
 });
 
 export const sessions = pgTable("sessions", {
+  reauthScope: text("reauth_scope"),
+  reauthExpiresAt: timestamp("reauth_expires_at", { withTimezone: true }),
   id: text("id").primaryKey(), // sha256 of the cookie token
   userId: uuid("user_id").notNull().references(() => users.id, { onDelete: "cascade" }),
   expiresAt: timestamp("expires_at", { withTimezone: true }).notNull(),

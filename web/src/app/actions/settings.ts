@@ -9,6 +9,7 @@ import { AiError, checkBaseUrl, getProvider, rawChat } from "@/lib/ai/provider";
 import { destroySession, requireUser } from "@/lib/auth";
 import { deleteAccount } from "@/lib/courses";
 import { decryptSecret, encryptSecret, randomToken, sha256 } from "@/lib/crypto";
+import { removePasskey } from "@/app/actions/passkeys";
 import { requireRecentUser } from "@/lib/security";
 import { rateLimit } from "@/lib/ratelimit";
 import { logActivity } from "@/lib/activity";
@@ -64,7 +65,7 @@ export async function removeProvider(_: ActionState): Promise<ActionState> {
 
 /** The pairing token is shown exactly once; only its hash is stored. */
 export async function createExtensionToken(_: ActionState, fd: FormData): Promise<ActionState & { token?: string }> {
-  const user = await requireUser();
+  const user = await requireRecentUser("extension-token");
   const existing = await db.select({ id: schema.extensionTokens.id }).from(schema.extensionTokens).where(eq(schema.extensionTokens.userId, user.id));
   if (existing.length >= 5) return { error: "You already have 5 pairing tokens. Revoke one first." };
   const token = `clx_${randomToken(30)}`;
@@ -82,7 +83,7 @@ export async function revokeExtensionToken(fd: FormData) {
 }
 
 export async function deleteAccountAction(_: ActionState, fd: FormData): Promise<ActionState> {
-  const user = await requireRecentUser();
+  const user = await requireRecentUser("account-delete");
   if (fd.get("confirm") !== "DELETE") return { error: "Type DELETE to confirm." };
   await destroySession();
   await deleteAccount(user.id);
@@ -94,4 +95,9 @@ export async function clearActivityAction(_: ActionState): Promise<ActionState> 
   const gone = await db.delete(schema.activityLog).where(eq(schema.activityLog.userId, user.id)).returning({ id: schema.activityLog.id });
   revalidatePath("/activity");
   return { ok: `Deleted ${gone.length} ${gone.length === 1 ? "event" : "events"}.` };
+}
+
+export async function removePasskeyAction(_: ActionState, form: FormData): Promise<ActionState> {
+  await removePasskey(String(form.get("passkeyId") ?? ""));
+  redirect("/login");
 }

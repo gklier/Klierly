@@ -19,9 +19,11 @@ export const accountInvitations = pgTable("account_invitations", {
 export const webauthnChallenges = pgTable("webauthn_challenges", {
   id: text("id").primaryKey(),
   challenge: text("challenge").notNull(),
-  purpose: text("purpose").$type<"login" | "enroll" | "add">().notNull(),
+  purpose: text("purpose").$type<"login" | "enroll" | "add" | "stepup">().notNull(),
   userId: uuid("user_id").references(() => users.id, { onDelete: "cascade" }),
   invitationId: text("invitation_id"),
+  sessionId: text("session_id"),
+  scope: text("scope"),
   expiresAt: timestamp("expires_at", { withTimezone: true }).notNull(),
 });
 

@@ -12,7 +12,7 @@ export async function clientIdentity(): Promise<string> {
 }
 
 export async function consumeLimit(key: string, limit: number, windowSeconds: number) {
-  await db.execute(sql`delete from security_limits where expires_at < now() - interval '1 hour'`);
+
   const result = await db.execute<{ count: number }>(sql`
     insert into security_limits (key, count, expires_at) values (${key}, 1, now() + ${windowSeconds} * interval '1 second')
     on conflict (key) do update set
@@ -22,14 +22,17 @@ export async function consumeLimit(key: string, limit: number, windowSeconds: nu
   if ((result.rows[0]?.count ?? limit + 1) > limit) throw new Error("Too many attempts. Please wait before trying again.");
 }
 
-export async function requireRecentUser() {
+export async function currentSessionId() {
+  return sha256((await cookies()).get(SESSION_COOKIE)?.value ?? "");
+}
+
+export async function requireRecentUser(scope = "admin") {
   const user = await requireUser();
-  const token = (await cookies()).get(SESSION_COOKIE)?.value;
-  const [session] = await db.select({ id: schema.sessions.id }).from(schema.sessions).where(and(
-    eq(schema.sessions.id, sha256(token ?? "")),
-    gt(schema.sessions.createdAt, new Date(Date.now() - 10 * 60_000)),
-  )).limit(1);
-  if (!session) throw new Error("Sign in with your passkey again before making this change.");
+  const [session] = await db.update(schema.sessions).set({ reauthScope: null, reauthExpiresAt: null }).where(and(
+    eq(schema.sessions.id, await currentSessionId()), eq(schema.sessions.userId, user.id),
+    eq(schema.sessions.reauthScope, scope), gt(schema.sessions.reauthExpiresAt, new Date()),
+  )).returning({ id: schema.sessions.id });
+  if (!session) throw new Error("Confirm this change with your passkey.");
   return user;
 }
 

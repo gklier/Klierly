@@ -2,7 +2,7 @@ import { cookies, headers } from "next/headers";
 import { redirect } from "next/navigation";
 import { and, eq, gt, lt } from "drizzle-orm";
 import { cache } from "react";
-import { db, schema } from "@/db";
+import { db, schema, type Tx } from "@/db";
 import { env } from "./env";
 import { randomToken, sha256 } from "./crypto";
 
@@ -11,14 +11,23 @@ const SESSION_DAYS = 7;
 
 export type AuthUser = { id: string; email: string; name: string; isAdmin: boolean };
 
-export async function createSession(userId: string) {
+export async function issueSession(tx: Tx, userId: string) {
   const token = randomToken();
   const expiresAt = new Date(Date.now() + SESSION_DAYS * 86400_000);
-  await db.insert(schema.sessions).values({ id: sha256(token), userId, expiresAt });
-  await db.delete(schema.sessions).where(lt(schema.sessions.expiresAt, new Date()));
-  (await cookies()).set(SESSION_COOKIE, token, {
-    httpOnly: true, sameSite: "lax", secure: env.secureCookies, path: "/", expires: expiresAt,
+  await tx.insert(schema.sessions).values({ id: sha256(token), userId, expiresAt });
+  return { token, expiresAt };
+}
+
+export async function setSessionCookie(session: { token: string; expiresAt: Date }) {
+  (await cookies()).set(SESSION_COOKIE, session.token, {
+    httpOnly: true, sameSite: "lax", secure: env.secureCookies, path: "/", expires: session.expiresAt,
   });
+}
+
+export async function createSession(userId: string) {
+  const session = await db.transaction((tx) => issueSession(tx, userId));
+  await db.delete(schema.sessions).where(lt(schema.sessions.expiresAt, new Date()));
+  await setSessionCookie(session);
 }
 
 export async function destroySession() {
