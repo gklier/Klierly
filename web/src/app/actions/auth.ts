@@ -12,7 +12,11 @@ import { rateLimit } from "@/lib/ratelimit";
 import { logActivity } from "@/lib/activity";
 import type { ActionState } from "@/components/forms";
 
-const clientIp = async () => (await headers()).get("x-forwarded-for")?.split(",")[0]?.trim() || "local";
+/**
+ * Behind a Cloudflare tunnel the web container is reachable only through Cloudflare, which sets CF-Connecting-IP itself
+ * (a client cannot choose it). The first X-Forwarded-For entry can be client-supplied, so it is only the fallback.
+ */
+const clientIp = async () => { const h = await headers(); return h.get("cf-connecting-ip")?.trim() || h.get("x-forwarded-for")?.split(",")[0]?.trim() || "local"; };
 const EMAIL = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
 export async function registrationMode(): Promise<"first-user" | "invite" | "closed"> {
