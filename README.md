@@ -39,9 +39,7 @@ covers private access through an SSH tunnel, updating, and backups.
 `WORKER_TOKEN`, `POSTGRES_PASSWORD`, then `docker compose up --build`. Only the web app is published,
 on 127.0.0.1:3000.
 
-**Account.** The first account can be created freely at `/register`; after that registration needs
-`INVITE_CODE`. No passwords are built in. Optional: `SEED_EMAIL=… SEED_PASSWORD=… npm run db:seed`
-creates an account with the sample course.
+**Accounts.** Students request an account by emailing **gabriel.klier@ufl.edu**. The administrator approves each address and replies with its single-use passkey enrollment link. Password sign-in and public registration are disabled. Existing deployments must follow `docs/SECURITY_OPERATIONS.md` to migrate the owner account. The public hostname is `https://klierly.klierapps.tech`; passkeys are tied to that hostname.
 
 ### Settings (`web/.env.local`)
 
@@ -52,7 +50,7 @@ creates an account with the sample course.
 | `APP_URL` | Public address of the app (https in production) |
 | `WORKER_URL`, `WORKER_TOKEN` | Internal parsing/calculation service and its shared secret |
 | `UPLOAD_DIR`, `MAX_UPLOAD_MB` | Where originals are stored; per-file limit (default 25 MB) |
-| `INVITE_CODE` | Required to register once an account exists |
+| `TRUST_CLOUDFLARE` | Enable only behind the trusted tunnel ingress |
 | `TZ` | Time zone for "today" in plans |
 | `ALLOW_PRIVATE_AI_ENDPOINTS` | `true` allows http://localhost model servers; set `false` on a shared server |
 
