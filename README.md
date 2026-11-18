@@ -1,142 +1,123 @@
-# Klierly (working title)
+<p align="center">
+  <img src="docs/images/klierly-hero.svg" alt="Klierly — Your courses. A clearer way through." width="100%" />
+</p>
 
-A private, course-grounded study app. You import course material you are allowed to use; Klierly
-turns it into a searchable library, a day-by-day study plan and original practice questions with
-scored feedback and source references. It is a learning tool, not a way to complete graded work,
-and it does not predict exam questions or grades.
+<p align="center">
+  <strong>A study workspace built around your actual course material.</strong><br />
+  Bring your notes together, make a realistic plan, and practice with sources you can check.
+</p>
 
-Three parts: `web/` (Next.js + PostgreSQL), `worker/` (Python: file parsing and tested numerical
-checks), `extension/` (optional Chrome/Edge extension). See `ARCHITECTURE.md`, `ROADMAP.md`,
-`TEST_REPORT.md`.
+<p align="center">
+  <a href="https://klierly.klierapps.tech">Visit Klierly</a> ·
+  <a href="#a-look-inside">Screenshots</a> ·
+  <a href="#try-it">Get started</a> ·
+  <a href="ROADMAP.md">Roadmap</a> ·
+  <a href="https://www.buymeacoffee.com/gklier">Buy me a coffee ↗</a>
+</p>
 
-## Run it locally
+<p align="center">
+  <img alt="Status: early preview" src="https://img.shields.io/badge/status-early_preview-2346c0" />
+  <img alt="Next.js and PostgreSQL" src="https://img.shields.io/badge/web-Next.js_%2B_PostgreSQL-17202b" />
+  <img alt="Python parsing worker" src="https://img.shields.io/badge/worker-Python-17202b" />
+  <img alt="Passkey sign-in" src="https://img.shields.io/badge/sign_in-passkeys-1b7450" />
+</p>
 
-Needs Node 22+, Python 3.11+, PostgreSQL 16.
+## The idea
 
-```bash
-# 1. Database (once)
-createuser klierly --pwprompt && createdb klierly -O klierly
+Course content lives everywhere: a syllabus, a stack of slides, lecture captions, a dozen Canvas pages, and your own notes. Figuring out **what to study today** can become another assignment.
 
-# 2. Settings
-cp .env.example web/.env.local
-#    edit web/.env.local: set DATABASE_URL password, APP_SECRET (openssl rand -base64 48), WORKER_TOKEN (openssl rand -hex 24)
+Klierly gives that material a home. It connects the course structure to your exam date and available time, then helps you work through it with practice, feedback, and references back to the original material.
 
-# 3. Worker (terminal 1)
-cd worker && python3 -m venv .venv && .venv/bin/pip install -r requirements.txt
-WORKER_TOKEN=<same value as in web/.env.local> .venv/bin/uvicorn app.main:app --host 127.0.0.1 --port 8001
+**The goal:** make studying feel manageable—and make it easier to understand *why* an answer is right.
 
-# 4. Web app (terminal 2)
-cd web && npm install && npm run db:migrate && npm run build && npm start
-```
+Built by [Gabriel Klier](https://github.com/gklier), starting with the needs of a real student. The name is a play on **Klier / clear**.
 
-Open http://localhost:3000. Health check: `curl http://localhost:3000/api/health` →
-`{"status":"ok","database":true,"worker":true}`. For development use `npm run dev` instead of build/start.
+## What you can do
 
-**On a server (for example Oracle Cloud, so it is always on):** follow `docs/DEPLOY_ORACLE.md`, a step-by-step guide that also
-covers private access through an SSH tunnel, updating, and backups.
-
-**Or with Docker** (built and run on x86_64 here; Arm is not verified): `cp .env.example .env`, set `APP_SECRET`,
-`WORKER_TOKEN`, `POSTGRES_PASSWORD`, then `docker compose up --build`. Only the web app is published,
-on 127.0.0.1:3000.
-
-**Accounts.** Students request an account by emailing **gabriel.klier@ufl.edu**. The administrator approves each address and replies with its single-use passkey enrollment link. Password sign-in and public registration are disabled. Existing deployments must follow `docs/SECURITY_OPERATIONS.md` to migrate the owner account. The public hostname is `https://klierly.klierapps.tech`; passkeys are tied to that hostname.
-
-### Settings (`web/.env.local`)
-
-| Variable | Purpose |
-| --- | --- |
-| `DATABASE_URL` | PostgreSQL connection |
-| `APP_SECRET` | 32+ random characters; encrypts saved AI keys. Changing it invalidates saved keys |
-| `APP_URL` | Public address of the app (https in production) |
-| `WORKER_URL`, `WORKER_TOKEN` | Internal parsing/calculation service and its shared secret |
-| `UPLOAD_DIR`, `MAX_UPLOAD_MB` | Where originals are stored; per-file limit (default 25 MB) |
-| `TRUST_CLOUDFLARE` | Enable only behind the trusted tunnel ingress |
-| `TZ` | Time zone for "today" in plans |
-| `ALLOW_PRIVATE_AI_ENDPOINTS` | `true` allows http://localhost model servers; set `false` on a shared server |
-
-## AI: included, your own, or none
-
-| Mode | Who pays | How |
+| Bring it together | Turn it into a routine | Learn with context |
 | --- | --- | --- |
-| **Klierly AI (managed)** | The operator | Set `MANAGED_AI_BASE_URL`, `MANAGED_AI_API_KEY`, `MANAGED_AI_MODEL` on the server. Students then need no key; they get a free allowance with visible usage. Details and limits: `docs/MANAGED_AI.md` |
-| **Your own provider** | The student | Settings → AI connection: base URL, model ID, API key, Test connection. Takes precedence over Klierly AI |
-| **None** | — | Import, search, study plan, practice on existing questions, grading and progress all still work |
+| Upload notes, slides, documents and captions | Build a daily plan around an exam and a time budget | Drill questions or take a timed mock exam |
+| Search your course material and open exact excerpts | Review suggested modules, objectives and dates before accepting them | See explanations and references to the original source |
+| Preview and selectively import permitted Canvas pages with the extension | Rework the schedule as you practice and miss days | Track topic mastery and the reasons behind mistakes |
 
-**Managed AI is OFF until the operator configures it, and no real provider has been configured or
-paid for.** It has been tested only against the bundled mock (`cd web && npm run mock-llm` →
-`http://127.0.0.1:4010/v1`, key `test-key`, model `mock-1`), whose questions are structurally valid
-but trivial. A ChatGPT or Claude subscription login is not an API credential and cannot be used.
-UF NaviGator is experimental and BYOK-only; see `docs/MANAGED_AI.md`.
+- **Useful with or without AI.** Import, search, planning, and practice on existing questions work without a provider. The synthetic sample includes **35 checked questions**.
+- **Optional course-grounded AI.** Generate questions and study notes using an operator-configured allowance or your own supported provider. Availability depends on configuration; a model subscription alone is not an API key.
+- **Clear boundaries.** AI-added background explanations are marked separately from course sources. Readiness is a heuristic, not a promised grade.
+- **Private accounts.** Account approval, passkey sign-in, revocable extension pairing, and administrator controls are built in. Files and original course text remain private to the account; class summary sharing requires separate approval and consent.
 
-The sample course (Courses → **Load the sample course**) is synthetic, comes with 35 checked
-questions, and needs no AI.
+## A look inside
 
-## Study for a real exam (QMB 3250 walk-through)
+These are real application screenshots using the **synthetic sample course** in an isolated environment. No student records or instructor-owned material are shown. The demo AI connection is a test provider; it is not evidence of real-model quality or an included production allowance.
 
-1. **New course** → `QMB 3250 – Statistics for Business Decisions`, term and tentative exam date optional.
-2. **Materials** → tick the permission box → upload syllabus, notes, slides, transcripts
-   (PDF, DOCX, PPTX, TXT, Markdown, HTML, CSV, XLSX, SRT, VTT) or paste text. Scanned PDFs without a
-   text layer are rejected with a clear message (no OCR yet).
-3. Review **Suggestions from your materials** (modules, topics, objectives, dates — each links to the
-   passage it came from). Accept, dismiss, or fix module/topic mapping by hand. **Coverage** shows gaps.
-   Topics come from your course itself, in this order: the **learning objectives** it states (one topic each, full objective kept), then useful section headings. File names, "Plan / Report / Step 2" labels and near-duplicates are filtered. **Suggest topics with AI** (Materials → Topics) can tidy and merge them; it only reads your material, every suggestion must point at a real excerpt, and nothing is added without your review.
-4. **Practice → Generate new questions** (needs AI: included or your own), or **Use the exam blueprint** to see how many
-   questions each topic should get, generate only the missing ones, and take a mock exam mixed to it. Drafts with a wrong calculation,
-   no real source, duplicate wording or more than one correct answer are discarded.
-5. **Study plan → Prepare for an exam**: real exam date, modules covered, minutes per day, how sessions
-   start, optional self-ratings, exam format. If your syllabus states the exam structure (questions, types, minutes,
-   points), Klierly finds it and fills it in for you to confirm; otherwise the format is labelled unknown, not guessed.
-6. Work the plan: **Start practice** on a session, or use Drill / Timed mock exam / Review mistakes / Learn.
-   Tag why a miss happened. Click any source reference to see the document, page, slide or timestamp.
-7. On a topic's Learn page, **Explain what the notes leave out** asks the AI to fill gaps in thin notes. That text is
-   general knowledge, shown separately in a dashed box labelled "AI-added · not from your course", never cited, never used to write questions.
-8. **Activity** (top bar) records what you did and what Klierly did for you; **Download diagnostics** gives a
-   JSON file of events, counts and titles (never document text or keys) to share when something needs debugging.
-9. **Progress** shows mastery by topic, mistake reasons and a readiness estimate (a heuristic, not a
-   grade prediction). **Update plan** re-weights the schedule and reschedules missed days.
-10. Delete a source (its page), a course (course settings) or everything (Settings → Delete account).
+### One place for the whole course
 
-## Browser extension
+![Klierly course overview showing the synthetic statistics course and its study tools](docs/images/course-overview.png)
 
-Chrome: `chrome://extensions` → Developer mode → **Load unpacked** → choose the `extension/` folder.
-In Klierly: Settings → Browser extension → **Create pairing token**; paste the server address and
-token into the extension's settings.
+### A searchable home for your material
 
-- **Discover this course** (on a Canvas course page): lists modules and items, lets you pick a
-  module range or single items, shows what will and will not be imported and why, then imports with
-  progress, stop and resume. Run it again later to pick up new or changed pages.
-- **Capture this page**: one page, preview first.
-- **Import captions**: on a page with a lecture video, reads the captions the player exposes, with timestamps.
+![Materials organized by course module, with sources and learning objectives](docs/images/materials.png)
 
-It reads rendered pages in your own tab and does not use the Canvas API. What that relies on, and
-what has not been established (institutional permission, real Canvas compatibility): `docs/LMS_ACCESS.md`.
-More detail: `extension/README.md`.
+### A plan that fits the time you have
 
-## Class library (share AI summaries with classmates)
+![A daily study plan built around an exam date and a 35-minute study budget](docs/images/study-plan.png)
 
-In the extension's Discover page, tick the terms and choose **Join the class library** while you have your Canvas
-course open; that links your Klierly course to the class. Then, on any source page, **Create summary** (an AI writes
-it in its own words; it stays private) and, if you want, **Share with class**. Classmates see the summary without
-your name, can report it, and you can take it down any time. Operators moderate from the Operator page. Only the
-summary is ever shared, never files, text or quotes. The class check is a claim made through the extension, **not
-verification of enrolment** (Klierly never contacts Canvas). Terms: `/terms/sharing`. Design and limits:
-`docs/DECISIONS.md`.
+### Practice that stays connected to the course
 
-## Tests
+![An active practice session from the synthetic statistics question bank](docs/images/practice.png)
+
+## Try it
+
+**Hosted preview:** [klierly.klierapps.tech](https://klierly.klierapps.tech). Request an account by emailing [gabriel.klier@ufl.edu](mailto:gabriel.klier@ufl.edu). Approved users receive a private, single-use enrollment link and create a passkey. Use a browser and device that support your passkey provider; cross-browser compatibility is still being worked through.
+
+After signing in, choose **Load the sample course** to explore without importing personal material or configuring AI.
+
+**Self-host:** start with [the setup guide](docs/SELF_HOSTING.md). For an existing installation, read [account migration and security operations](docs/SECURITY_OPERATIONS.md) before updating. [Cloudflare Tunnel deployment](docs/DEPLOY_CLOUDFLARE.md) is documented separately.
 
 ```bash
-cd worker && .venv/bin/pip install -r requirements-dev.txt && .venv/bin/python -m pytest -q
-cd web && npm run typecheck && npm run lint && npm test     # needs Postgres + worker running; uses database klierly_test
-cd web && npm run test:e2e                                   # builds, then Playwright; uses database klierly_e2e
-cd extension && npm test
+git clone https://github.com/gklier/Klierly.git
+cd Klierly
+cp .env.example .env
+# Set the required secrets and your final APP_URL before starting.
+docker compose up -d --build
 ```
-`klierly_test` must exist (`createdb klierly_test -O klierly`); the role needs CREATEDB for the E2E reset.
 
-## Founder action required
+A fresh installation also needs its first administrator provisioned from the trusted server console; the setup guide covers that step. Public registration and password sign-in are disabled.
 
-- **Managed AI**: choose and fund a provider, then set the three `MANAGED_AI_*` variables. Until then students need their own key.
-- **UF / Canvas**: confirm that using the extension on your course site is permitted (`docs/LMS_ACCESS.md`).
-- **Real pilot**: import your own permitted QMB 3250 material; check your syllabus/instructor rules on
-  sharing material with outside AI services and set the per-course switch accordingly.
-- **Before any public launch**: legal review of the privacy draft, hosting decision (nothing has been
-  deployed or purchased), extension store policies re-checked. See `ROADMAP.md`.
+### Bring permitted course pages with you
+
+The optional browser extension offers single-page capture, multi-page course discovery, selective import, stop/resume, and supported lecture captions. It previews what will be sent and requests site access when needed.
+
+It does not use a Canvas API key or try to bypass locked content. Active assessments, grades, rosters, and unsupported items are excluded by checks that have limits. Import only material you are permitted to use. Klierly is an independent project, with no university or LMS endorsement.
+
+[Install and use the extension →](extension/README.md) · [Access model and limitations →](docs/LMS_ACCESS.md)
+
+## Built to grow carefully
+
+This is an **early product preview**. The core workflow is implemented and tested; real-course quality, browser compatibility, and operational reliability still need pilot feedback. OCR, official Canvas OAuth, mobile apps, and billing are not shipped.
+
+The ambition is a sustainable study product. Potential paid offerings include convenient hosted access and clearly limited AI allowances. Pricing and plans are undecided; nothing in this repository promises unlimited AI or a permanently free hosted service. [Product direction and commercial plans →](docs/PRODUCT_DIRECTION.md)
+
+If the project is useful—or you want to help fund hosting, AI experiments, and continued development—[**buy me a coffee**](https://www.buymeacoffee.com/gklier). Support is optional and does not purchase an account, subscription, or promised feature.
+
+## For builders
+
+| Component | What it handles |
+| --- | --- |
+| [`web/`](web/) | Next.js, TypeScript, PostgreSQL, account access, study workflows and provider connections |
+| [`worker/`](worker/) | Python document parsing and numerical checks |
+| [`extension/`](extension/) | Course discovery, page capture, captions and pairing |
+| [`fixtures/`](fixtures/) | Synthetic sample materials and test cases |
+
+The latest security release passed **195 tests**: 106 application, 46 browser, 26 worker, and 17 extension tests. Real-hostname WebAuthn enrollment and login were also checked. This is a recorded validation result, not a guarantee that every future commit passes.
+
+[Architecture](ARCHITECTURE.md) · [Development and tests](docs/DEVELOPMENT.md) · [Security operations](docs/SECURITY_OPERATIONS.md) · [Known issues](docs/KNOWN_ISSUES.md) · [Roadmap](ROADMAP.md)
+
+## Feedback, security, and source terms
+
+Found a usability problem or have a feature idea? [Open an issue](https://github.com/gklier/Klierly/issues). Please use synthetic examples and remove account tokens, private course text, and personal details.
+
+For a suspected security issue, **do not post exploit details or secrets publicly**. See [SECURITY.md](SECURITY.md) for private reporting.
+
+**Public source preview.** No open-source license has been selected. Publishing the source does not grant a license to redistribute it, sell it, or run a competing hosted service. Licensing and outside contributions need an explicit agreement; dependency licenses remain their own. See [source terms](SOURCE_TERMS.md).
+
+<p align="center"><sub>Less time organizing the work. More time understanding it.</sub></p>

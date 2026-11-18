@@ -1,4 +1,26 @@
-# Test report (Phase 2)
+# Validation record
+
+## Security release — November 17, 2026
+
+The application at commit `8e46d3f` passed a full isolated Linux validation run. The following documentation-only commit `4654062` was deployed and checked on the final HTTPS hostname.
+
+| Area | Result |
+| --- | --- |
+| Application and integration tests | 106 passed |
+| Browser end-to-end tests | 46 passed |
+| Python worker tests | 26 passed |
+| Browser extension tests | 17 passed |
+| Type checking, lint, production build | Passed |
+| Production JavaScript dependency audit | Zero reported vulnerabilities |
+| Python runtime dependency audit | No known vulnerabilities found |
+| Public HTTPS smoke | Login, security headers, anonymous admin restriction and extension authentication passed |
+| Real-hostname WebAuthn | Temporary-account enrollment and sign-in, secure cookie attributes and student/admin isolation passed; temporary account removed |
+
+Claude independently reviewed changed security source files with the owner's approval. Revocation races, short-lived verification and target-bound approvals were addressed. Backups were encrypted and copied off the VM; a complete restore drill remains outstanding.
+
+The public repository presentation adds real browser screenshots from the isolated synthetic course. No student records or private course files are included. Automated AI cases use a deterministic mock provider and do not establish real-model teaching quality. Test counts describe a recorded run, not a warranty or a live CI badge.
+
+## Earlier Phase 2 validation
 
 Run on 2026-11-14 in a Linux x86_64 container: Node 22, Python 3.13, PostgreSQL 16, Chromium
 (Playwright 1.63). Everything in the tables was executed. What could not be run is under

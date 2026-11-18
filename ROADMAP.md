@@ -1,71 +1,49 @@
 # Roadmap
 
-## Works now
+Klierly aims to turn permitted course material into a study routine that is easier to follow and inspect. This is a direction of travel, not a commitment to dates or a promise that every idea will ship.
 
-Phase 1: accounts · courses · upload/paste of ten formats · source viewer with page/slide/timestamp ·
-search · reviewable suggestions · study plan · Learn / Drill / Timed exam / Review · validated
-question generation · mastery, spaced review, readiness heuristic · deletion · sample course ·
-single-page capture extension.
+## Available in the preview
 
-Phase 2: **managed AI** with quotas, cost accounting and operator page (mock-tested; not configured)
-· **course discovery** for Canvas-style sites with selection, preview, progress, stop/resume and
-sync · **lecture captions** · structure-preserving capture · **AI topic suggestions** · **exam
-blueprint**, blueprint-weighted mock exam, targeted follow-up · **CI**.
+- Private courses, import and paste, search, and source excerpts with page, slide or timestamp references.
+- Reviewable suggestions for modules, learning objectives and dates; manual corrections and coverage checks.
+- Exam-aware daily plans, practice drills, timed mock exams, mistake review and progress heuristics.
+- Optional AI question and note generation, validated structure and arithmetic, source references, and separately labelled general explanations.
+- A synthetic statistics sample with 35 checked questions that needs no AI provider.
+- Extension-based Canvas-style discovery, selective import, page capture, captions, progress and stop/resume.
+- Optional class summary sharing, subject to administrator membership approval, class enablement, student consent and moderation.
+- Approved accounts, passkey-only sign-in, revocable expiring extension tokens, administrator controls and targeted fresh verification for sensitive actions.
+- Managed-AI reservation and budget controls, constrained provider destinations, bounded uploads and parsing, isolated services, and Cloudflare Tunnel deployment support.
 
-Phase 2, fourth round: **class library** (share AI summaries with classmates, class membership claimed
-through the extension, reports, operator moderation and per-class switch) · caption clean-up for
-automatic transcripts (JMP/"jump" search, spaced hyphens and decimals).
+## Next: make the pilot dependable
 
-## Decisions waiting on the founder
+1. **Onboarding and browser compatibility.** Improve enrollment instructions, passkey-provider guidance, recovery and second-device setup. Investigate the reported Firefox login friction.
+2. **Real-course validation.** Test import on permitted Canvas pages and supported lecture players, then adjust selectors and file handling. Automated LMS coverage is synthetic; it does not prove every institution's site works.
+3. **Learning quality.** Evaluate real-provider question quality and explanations with students. Validation of citations, structure and arithmetic is not a substitute for subject review.
+4. **Operations.** Complete a restore drill, add dependable uptime/error monitoring, document retention and backup practices, and test upgrade recovery.
+5. **Accessibility and usability.** Improve the daily workflow, error messages, keyboard navigation and mobile-browser experience from pilot feedback.
 
-- **Sharing materials between students (crowdsourcing).** Not built. It reverses the original rule against shared repositories of course material, and the main risk is copyright and university policy, not code. See `docs/DECISIONS.md` for the reasoning and the narrow version that would be safe to build.
-- **Past exams for structure.** Not built; a structure-only version (count, types, topic spread; never shown, shared or used to write questions) is proposed in `docs/DECISIONS.md`.
+## Then: validate a sustainable product
 
-## Next, in order
+Measure whether students return, what helps them learn, and the real per-user AI and hosting costs. Explore paid hosted convenience and bounded AI allowances only after the costs, demand and support obligations are understood. Billing, subscriptions and published prices do not exist yet.
 
-1. **Real-course shakedown (QMB 3250 at UF)**: run discovery and captions on the real site; adjust
-   Canvas selectors, file-download handling and caption reading to what is actually there.
-2. **Configure a managed AI provider** (founder decision) and evaluate question quality on real material.
-3. Mediasite is built from the founder's snippet but untested on a real lecture; next is making lecture videos part of a course-wide run (a permission prompt needs a click, so it needs a deliberate step), and fixing the format once the real transcript is seen.
-4. Official Canvas OAuth with an institution-issued developer key, replacing page reading where a university approves it.
+See [product direction](docs/PRODUCT_DIRECTION.md) for commercial options and [source terms](SOURCE_TERMS.md) for the current licensing position. Optional [Buy Me a Coffee support](https://www.buymeacoffee.com/gklier) helps fund development without promising access or features.
 
-## Deliberately not built (hidden, no dead buttons)
+## Explorations, not shipped features
 
-| Item | Note |
+| Idea | What needs to happen first |
 | --- | --- |
-| Official Canvas OAuth | Needs an institution-issued developer key. No "Connect Canvas" button exists |
-| Other LMS platforms | Adapter interface exists (`extension/src/lms/`); only Canvas is written |
-| OCR for scanned PDFs | Currently rejected with a clear message |
-| Embeddings / pgvector | Slot behind `searchChunks()` |
-| Diagram and audio presentation modes, mini games, video | Not started; plan form offers only the two modes that exist |
-| Collaboration, instructor features, mobile apps, billing | Not started |
-| Email (verification, password reset) | Not started — a forgotten password currently needs the operator |
-| Data export | Originals can be downloaded; no bulk export yet |
+| Official Canvas OAuth | Institutional developer-key approval and access-policy review |
+| OCR for scanned material | Accuracy, resource and privacy evaluation |
+| More LMS platforms | Real permission-aware workflows and adapter coverage |
+| Bulk account data export | A defined portable format and access review |
+| Native mobile applications | Evidence that the browser workflow needs native support |
+| Instructor and institutional tools | Product discovery, privacy requirements and appropriate agreements |
+| Paid hosting and plans | Real costs, willingness to pay, billing and customer terms |
 
-No feature flags are needed yet: unfinished features have no code paths or UI.
+## Boundaries that stay visible
 
-## Before a public beta
+Only import material you are allowed to use. Do not use Klierly to capture active assessments or complete graded work. Institution and instructor rules still apply. Original files are private; optional summary sharing is a narrower, separately controlled feature.
 
-1. **Legal**: lawyer review of privacy policy and terms; copyright/DMCA process; FERPA position if any
-   institution is involved; age and consent wording.
-2. **Policies to re-read at that time** (not verified here beyond designing to their intent):
-   Chrome Web Store Limited Use and permission justification, Instructure API policy, each
-   university's AI and LMS rules (UF's included), NaviGator terms.
-3. **Security**: independent review; CSP with nonces; DNS-pinning for AI endpoints (SSRF via DNS
-   rebinding); account lockout and email flows; upload malware scanning; secrets rotation plan.
-4. **Operations**: error tracking, uptime checks, tested restore from backup, shared rate limiter and
-   external job queue if more than one web instance, log retention policy.
-5. **Product quality**: evaluate generated questions with a real model on real courses — the checks
-   guarantee structure, sources and arithmetic, not pedagogy; conceptual MCQ keys remain
-   "not independently verified" and are labelled so.
-6. **Framework**: move from Next.js 15 to 16, and re-test the intermittent hydration error in `docs/KNOWN_ISSUES.md` there.
+Before broader paid access, review privacy and service terms, copyright handling, extension-store policies, institutional rules and real-model quality. Keep dependency and platform updates current. No security review, test count or readiness score is a guarantee.
 
-## Launch risks (rough)
-
-- **Rights to course material** are the largest risk: instructors and publishers may object even to
-  private use with an outside AI. Mitigations in place: private by default, per-import declaration,
-  per-course AI switch, no sharing. Not a legal shield.
-- **Academic-integrity perception**: the assessment guard is heuristic; a determined user can paste
-  anything. The product should keep refusing to position itself near graded work.
-- **AI cost and quality** vary by provider; the app cannot see prices.
-- **Heuristic suggestions** depend on how tidy the source documents are.
+Technical decisions: [architecture](ARCHITECTURE.md), [design decisions](docs/DECISIONS.md), [LMS access model](docs/LMS_ACCESS.md), [known issues](docs/KNOWN_ISSUES.md), [security operations](docs/SECURITY_OPERATIONS.md).
