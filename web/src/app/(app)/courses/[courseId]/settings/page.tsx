@@ -1,3 +1,4 @@
+import { CourseDownload } from "@/components/course-download";
 import { deleteCourseAction, updateCourse } from "@/app/actions/courses";
 import { leaveClassAction, unlinkCourseAction } from "@/app/actions/sharing";
 import { ActionForm, ConfirmAction, Submit } from "@/components/forms";
@@ -14,6 +15,7 @@ export default async function CourseSettings({ params }: { params: Promise<{ cou
   return (
     <div className="max-w-2xl space-y-6">
       <h1 className="text-2xl font-semibold">Course settings</h1>
+      <section className="panel space-y-3 p-5"><h2 className="text-base font-semibold">Take your materials with you</h2><p className="text-sm text-muted">One ZIP with originals, readable text, course structure, study notes, questions and a study prompt for another tool. Credentials and sign-in data are excluded. Review private content before sharing it.</p><CourseDownload courseId={course.id}/></section>
       <ActionForm action={updateCourse} className="panel space-y-4 p-5">
         <input type="hidden" name="courseId" value={course.id} />
         <div><label className="label" htmlFor="name">Course name</label><input id="name" name="name" className="input" required maxLength={160} defaultValue={course.name} /></div>

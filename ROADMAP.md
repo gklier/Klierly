@@ -4,6 +4,7 @@ Klierly aims to turn permitted course material into a study routine that is easi
 
 ## Available in the preview
 
+- Per-course ZIP exports with originals, extracted text, study data and a readable handoff index.
 - Mobile study rounds with flashcards, several recall angles, saved progress, exam-scope selection and account-isolated server grading. Free recall remains explicitly self-assessed.
 - Private courses, import and paste, search, and source excerpts with page, slide or timestamp references.
 - Reviewable suggestions for modules, learning objectives and dates; manual corrections and coverage checks.
@@ -36,7 +37,7 @@ See [product direction](docs/PRODUCT_DIRECTION.md) for commercial options and [s
 | Official Canvas OAuth | Institutional developer-key approval and access-policy review |
 | OCR for scanned material | Accuracy, resource and privacy evaluation |
 | More LMS platforms | Real permission-aware workflows and adapter coverage |
-| Bulk account data export | A defined portable format and access review |
+| Account-wide portability | Extend the existing per-course ZIP format with careful access and restore semantics |
 | Native mobile applications | Evidence that the browser workflow needs native support |
 | Instructor and institutional tools | Product discovery, privacy requirements and appropriate agreements |
 | Paid hosting and plans | Real costs, willingness to pay, billing and customer terms |

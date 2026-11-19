@@ -40,6 +40,7 @@ Built by [Gabriel Klier](https://github.com/gklier), starting with the needs of 
 | Search your course material and open exact excerpts | Review suggested modules, objectives and dates before accepting them | See explanations and references to the original source |
 | Preview and selectively import permitted Canvas pages with the extension | Rework the schedule as you practice and miss days | Track topic mastery and the reasons behind mistakes |
 
+- **Take your course with you.** Download originals, readable extracted text, notes, questions and course structure in one ZIP, with an index and a study prompt for another tool. [Course exports →](docs/COURSE_EXPORT.md)
 - **Study on your phone.** Short, saved rounds combine recall, recognition, explanations in your own words, and application questions. Flashcards work from existing course references; recent misses return from another angle.
 - **Useful with or without AI.** Import, search, planning, and practice on existing questions work without a provider. The synthetic sample includes **35 checked questions**.
 - **Optional course-grounded AI.** Generate questions and study notes using an operator-configured allowance or your own supported provider. Availability depends on configuration; a model subscription alone is not an API key.

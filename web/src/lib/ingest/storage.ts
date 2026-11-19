@@ -1,4 +1,5 @@
 import fs from "node:fs/promises";
+import { constants } from "node:fs";
 import path from "node:path";
 import { env } from "@/lib/env";
 
@@ -29,3 +30,11 @@ export async function removeUserFiles(userId: string) {
   if (!UUID.test(userId)) throw new Error("Invalid user id.");
   await fs.rm(path.join(env.uploadDir, userId), { recursive: true, force: true });
 }
+
+
+/** Read-only streams for authenticated exports; never follow a symlink. */
+export async function openStoredFile(rel: string) {
+  const handle = await fs.open(resolve(rel), constants.O_RDONLY | constants.O_NOFOLLOW);
+  return handle.createReadStream({ autoClose: true });
+}
+export const statStoredFile = (rel: string) => fs.lstat(resolve(rel));

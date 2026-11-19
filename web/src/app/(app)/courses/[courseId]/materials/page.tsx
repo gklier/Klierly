@@ -1,3 +1,4 @@
+import { CourseDownload } from "@/components/course-download";
 import Link from "next/link";
 import { and, asc, desc, eq, inArray } from "drizzle-orm";
 import { db, schema } from "@/db";
@@ -67,9 +68,10 @@ export default async function MaterialsPage({ params, searchParams }: { params: 
 
   return (
     <div className="space-y-7">
-      <div>
-        <h1 className="text-2xl font-semibold">Materials</h1>
-        <p className="mt-1 text-muted">Everything Klierly knows about this course comes from what you add here. It stays private to your account.</p>
+      <div className="flex flex-wrap items-start justify-between gap-4">
+        <div><h1 className="text-2xl font-semibold">Materials</h1>
+        <p className="mt-1 text-muted">Everything Klierly knows about this course comes from what you add here. It stays private to your account.</p></div>
+        <CourseDownload courseId={course.id}/>
       </div>
 
       <ImportPanel courseId={course.id} modules={modules.map((m) => ({ id: m.id, name: m.name }))} maxMb={Math.round(env.maxUploadBytes / 1048576)} pendingAtLoad={pending} />
