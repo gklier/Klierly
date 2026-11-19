@@ -50,6 +50,13 @@
       "when": 1794969736193,
       "tag": "0006_lazy_slipstream",
       "breakpoints": true
+    },
+    {
+      "idx": 7,
+      "version": "7",
+      "when": 1795046399047,
+      "tag": "0007_mobile_study",
+      "breakpoints": true
     }
   ]
 }

@@ -4,6 +4,7 @@ Klierly aims to turn permitted course material into a study routine that is easi
 
 ## Available in the preview
 
+- Mobile study rounds with flashcards, several recall angles, saved progress, exam-scope selection and account-isolated server grading. Free recall remains explicitly self-assessed.
 - Private courses, import and paste, search, and source excerpts with page, slide or timestamp references.
 - Reviewable suggestions for modules, learning objectives and dates; manual corrections and coverage checks.
 - Exam-aware daily plans, practice drills, timed mock exams, mistake review and progress heuristics.

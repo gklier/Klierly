@@ -89,6 +89,7 @@ export default async function CourseOverview({ params }: { params: Promise<{ cou
         </section>
       )}
 
+      <section className="study-welcome flex flex-wrap items-center justify-between gap-4"><div><p className="study-eyebrow">Ready when you are</p><h2 className="mt-2 text-xl font-semibold">A small round. A clearer concept.</h2><p className="mt-2 max-w-lg text-sm text-muted">Flashcards, recall and different question angles. Keep the round inside your exam scope.</p></div><Link href={`${base}/study`} className="btn btn-primary min-h-14">Start studying <Icon name="arrow"/></Link></section>
       <section className="grid gap-4 md:grid-cols-2">
         <div className="panel p-5">
           <div className="flex items-center justify-between"><h2 className="text-base font-semibold">Recent imports</h2><Link href={`${base}/materials`} className="btn btn-sm btn-quiet">All materials</Link></div>

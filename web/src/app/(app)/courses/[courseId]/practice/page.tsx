@@ -57,6 +57,7 @@ export default async function PracticePage({ params }: { params: Promise<{ cours
         </p>
       </div>
 
+      <Link href={`/courses/${course.id}/study`} className="study-welcome block"><span className="study-eyebrow">A quicker way in</span><h2 className="mt-2 text-xl font-semibold">Study a concept from different sides →</h2><p className="mt-2 text-sm text-muted">Try short flashcard and Learn mix rounds, built for your phone and saved across devices.</p></Link>
       {topics.length === 0 ? (
         <p className="notice">Practice is organised by topic. <Link className="link" href={`/courses/${course.id}/materials`}>Import material and accept or add topics</Link> first.</p>
       ) : (

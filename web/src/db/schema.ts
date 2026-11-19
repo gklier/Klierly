@@ -1,3 +1,4 @@
+import type { StudyMode, StudyState } from "@/lib/study/core";
 import { sql } from "drizzle-orm";
 import {
   type AnyPgColumn, pgTable, uuid, text, timestamp, integer, boolean, jsonb, real, date, index, uniqueIndex, primaryKey, customType,
@@ -466,3 +467,16 @@ export const sharedReports = pgTable("shared_reports", {
   reason: text("reason").notNull(),
   createdAt: createdAt(),
 }, (t) => [uniqueIndex("shared_reports_once_uq").on(t.itemId, t.reporterUserId)]);
+
+
+/** Private, resumable study rounds; no source text is copied into the queue. */
+export const studySessions = pgTable("study_sessions", {
+  id: id(),
+  userId: uuid("user_id").notNull().references(() => users.id, { onDelete: "cascade" }),
+  courseId: uuid("course_id").notNull().references(() => courses.id, { onDelete: "cascade" }),
+  mode: text("mode").$type<StudyMode>().notNull(),
+  status: text("status").$type<"active" | "completed" | "ended">().notNull().default("active"),
+  state: jsonb("state").$type<StudyState>().notNull(),
+  createdAt: createdAt(),
+  updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
+}, (t) => [index("study_sessions_owner_course_idx").on(t.userId, t.courseId, t.updatedAt)]);

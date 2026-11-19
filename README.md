@@ -40,6 +40,7 @@ Built by [Gabriel Klier](https://github.com/gklier), starting with the needs of 
 | Search your course material and open exact excerpts | Review suggested modules, objectives and dates before accepting them | See explanations and references to the original source |
 | Preview and selectively import permitted Canvas pages with the extension | Rework the schedule as you practice and miss days | Track topic mastery and the reasons behind mistakes |
 
+- **Study on your phone.** Short, saved rounds combine recall, recognition, explanations in your own words, and application questions. Flashcards work from existing course references; recent misses return from another angle.
 - **Useful with or without AI.** Import, search, planning, and practice on existing questions work without a provider. The synthetic sample includes **35 checked questions**.
 - **Optional course-grounded AI.** Generate questions and study notes using an operator-configured allowance or your own supported provider. Availability depends on configuration; a model subscription alone is not an API key.
 - **Clear boundaries.** AI-added background explanations are marked separately from course sources. Readiness is a heuristic, not a promised grade.

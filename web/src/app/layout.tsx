@@ -11,8 +11,9 @@ export const metadata: Metadata = {
   title: { default: "Klierly", template: "%s · Klierly" },
   description: "Turn the course material you are allowed to use into a personal study system.",
   robots: { index: false, follow: false },
+  appleWebApp: { capable: true, title: "Klierly", statusBarStyle: "default" },
 };
-export const viewport: Viewport = { width: "device-width", initialScale: 1 };
+export const viewport: Viewport = { width: "device-width", initialScale: 1, viewportFit: "cover", themeColor: "#2346c0" };
 
 export default async function RootLayout({ children }: { children: React.ReactNode }) {
   const theme = (await cookies()).get("cl_theme")?.value;
