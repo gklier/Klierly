@@ -58,6 +58,7 @@ export default async function DocumentPage({ params, searchParams }: { params: P
 
       {doc.status === "failed" && <p role="alert" className="notice notice-bad mt-4"><strong>This source could not be processed.</strong> {doc.error}</p>}
       {(doc.status === "queued" || doc.status === "processing") && <ProcessingStatus />}
+      {/transcript|captions/i.test(doc.filename + " " + doc.title) && <p className="notice notice-warn mt-5"><strong>Lecture transcript.</strong> Automatic captions can mishear test names, symbols and numbers. Extraction quality measures whether text was read, not whether the lecture was transcribed correctly. Check important details against the lecture and your instructor’s notes.</p>}
       {doc.warnings.length > 0 && <ul className="notice notice-warn mt-4 list-disc space-y-1 pl-8">{doc.warnings.map((w, i) => <li key={i}>{w}</li>)}</ul>}
       {highlight && !highlighted && doc.status === "ready" && <p className="notice notice-warn mt-4">The cited excerpt is no longer in this source (it may have been re-imported). Nothing is highlighted rather than guessing.</p>}
       {highlighted && <p className="notice mt-4 text-sm">Showing the cited excerpt{locationLabel(highlighted) ? ` (${locationLabel(highlighted)})` : ""}. <a className="link" href={`#c-${highlighted.id}`}>Jump to it</a></p>}

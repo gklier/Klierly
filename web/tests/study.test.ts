@@ -1,5 +1,4 @@
 import {afterAll,beforeAll,describe,expect,it} from 'vitest';
-import {eq} from 'drizzle-orm';
 import {db,schema,getPool} from '@/db';
 import {buildStudyState,addReviewTurn,angleCoverage,topicsNeedingReview} from '@/lib/study/core';
 import {startStudy,studyView,moveStudy} from '@/lib/study/service';
