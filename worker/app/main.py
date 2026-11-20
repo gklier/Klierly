@@ -14,6 +14,7 @@ from fastapi.responses import JSONResponse
 from starlette.exceptions import HTTPException as StarletteHTTPException
 
 from .errors import WorkerError
+from . import sandbox
 from .numeric import functions as numeric
 from .parsers import PARSER_NAMES, parse_bytes, parse_pasted
 
@@ -124,6 +125,15 @@ async def numeric_compute(request: Request) -> dict[str, Any]:
     if not isinstance(body, dict):
         raise WorkerError(400, "invalid_request", "Send an object with 'fn' and 'args'.")
     return numeric.compute(body.get("fn"), body.get("args", {}))
+
+
+@app.post("/sandbox/run", dependencies=[Depends(require_token)])
+async def sandbox_run(request: Request) -> dict[str, Any]:
+    """Run an AI-written pure solver for many parameter sets. See app/sandbox.py for what is and is not enforced."""
+    body = await request.json()
+    if not isinstance(body, dict):
+        raise WorkerError(400, "invalid_request", "Expected a JSON object.")
+    return {"results": sandbox.run_solver(body.get("code"), body.get("params"), body.get("fn", "solve"))}
 
 
 @app.post("/numeric/ols", dependencies=[Depends(require_token)])
