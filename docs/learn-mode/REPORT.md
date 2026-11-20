@@ -13,7 +13,7 @@
 | Suite | Result |
 |---|---|
 | Worker (pytest) | 43 passed (17 new: sandbox escapes, runaway loops, memory bombs, NaN, limits, scipy agreement) |
-| Web integration and unit (vitest, real Postgres + worker, mock AI) | 137 passed (49 new: engine 10, pipeline 16, study service 10, plus earlier) |
+| Web integration and unit (vitest, real Postgres + worker, mock AI) | 137 passed (36 new: engine 10, pipeline 16, study service 10) |
 | Browser (Playwright, production build) | 53 passed (9 new Learn Mode tests with screenshots in `docs/learn-mode/screenshots/`), zero console errors |
 | Extension | 17 passed |
 | Types, lint, `npm audit` | clean |
