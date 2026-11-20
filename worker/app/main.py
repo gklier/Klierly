@@ -8,7 +8,7 @@ import hmac
 import os
 from typing import Any
 
-from fastapi import Depends, FastAPI, Request
+from fastapi import Body, Depends, FastAPI, Request
 from fastapi.exceptions import RequestValidationError
 from fastapi.responses import JSONResponse
 from starlette.exceptions import HTTPException as StarletteHTTPException
@@ -128,11 +128,10 @@ async def numeric_compute(request: Request) -> dict[str, Any]:
 
 
 @app.post("/sandbox/run", dependencies=[Depends(require_token)])
-async def sandbox_run(request: Request) -> dict[str, Any]:
-    """Run an AI-written pure solver for many parameter sets. See app/sandbox.py for what is and is not enforced."""
-    body = await request.json()
-    if not isinstance(body, dict):
-        raise WorkerError(400, "invalid_request", "Expected a JSON object.")
+def sandbox_run(body: dict[str, Any] = Body(...)) -> dict[str, Any]:
+    """Run an AI-written pure solver for many parameter sets. See app/sandbox.py for what is and is not enforced.
+
+    A plain ``def`` on purpose: FastAPI runs it in a thread, so a slow solver never blocks parsing requests."""
     return {"results": sandbox.run_solver(body.get("code"), body.get("params"), body.get("fn", "solve"))}
 
 

@@ -1,6 +1,6 @@
 import { and, asc, desc, eq, inArray, notInArray, sql } from "drizzle-orm";
 import { db, schema } from "@/db";
-import type { LmCursor, LmItem, LmQuestionState } from "@/db/schema";
+import type { LmCursor, LmItem } from "@/db/schema";
 import { logActivity } from "@/lib/activity";
 import { buildNumericItems } from "./items";
 import { afterPractice, applyAnswer, gradeNumeric, isDone, mastery, newQuestionState, nextHintLevel, revisitChoice, scoreOf, type ConceptState, type MissEntry } from "./engine";
@@ -98,14 +98,6 @@ async function firstNumericKey(conceptId: string, userId: string): Promise<strin
   return r?.key ?? null;
 }
 
-async function ensureQuestion(userId: string, p: Progress, c: Concept, states: Map<string, ConceptState>) {
-  const cur = p.cursor!;
-  if (cur.qs && !cur.qs.answered) return;
-  if (cur.qs?.answered && cur.phase === "guided") return; // the learner presses Next
-  if (cur.qs?.answered) return;
-  await nextQuestion(userId, p, c, states);
-}
-
 async function nextQuestion(userId: string, p: Progress, c: Concept, states: Map<string, ConceptState>) {
   const cur = p.cursor!;
   cur.pcount += 1;
@@ -144,7 +136,6 @@ async function enterConcept(userId: string, p: Progress, c: Concept, states: Map
 }
 
 export type Phase = LmCursor["phase"];
-const ORDER: Phase[] = ["learn", "worked", "guided", "practice", "done"];
 
 /** Move to the next phase. "worked" is skipped when the concept has no numeric example. */
 export async function advance(userId: string, courseId: string) {

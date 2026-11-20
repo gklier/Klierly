@@ -6,7 +6,6 @@ import { and, eq } from "drizzle-orm";
 import { db, getPool, schema } from "@/db";
 import { deleteAccount } from "@/lib/courses";
 import { createSource } from "@/lib/ingest/pipeline";
-import { runBuild } from "@/lib/learn/pipeline";
 import { advance, answer, conceptList, guideStatus, hint, LearnError, pickItem, reportItem, startBuild, startStudying, studyView } from "@/lib/learn/service";
 import { resetRateLimits } from "@/lib/ratelimit";
 import { MOCK_KEY, startMockLlm } from "../scripts/mock-llm";
