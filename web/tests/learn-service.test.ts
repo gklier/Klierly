@@ -2,11 +2,12 @@ import fs from "node:fs/promises";
 import path from "node:path";
 import type http from "node:http";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
-import { and, eq } from "drizzle-orm";
+import { and, desc, eq } from "drizzle-orm";
 import { db, getPool, schema } from "@/db";
 import { deleteAccount } from "@/lib/courses";
 import { createSource } from "@/lib/ingest/pipeline";
 import { advance, answer, conceptList, screenToken, guideStatus, hint, LearnError, pickItem, reportItem, startBuild, startStudying, studyView } from "@/lib/learn/service";
+import { newQuestionState } from "@/lib/learn/engine";
 import { resetRateLimits } from "@/lib/ratelimit";
 import { MOCK_KEY, startMockLlm } from "../scripts/mock-llm";
 import { FIXTURES, makeCourse, makeUser, prepareDb, waitForDocument } from "./helpers";
@@ -251,6 +252,24 @@ describe("question supply, dedupe and reports", () => {
     expect(await db.select().from(schema.lmReports).where(eq(schema.lmReports.itemKey, it.key))).toHaveLength(1);
     await reportItem(other.id, courseId, it.key, "not mine"); // someone else's item: ignored
     expect(await db.select().from(schema.lmReports).where(eq(schema.lmReports.userId, other.id))).toHaveLength(0);
+  });
+
+  it("credits a revisit to the concept the question tests", async () => {
+    const [current, reviewed] = await conceptList(u.id, courseId);
+    const item = await pickItem(u.id, { seen: {}, seenStems: {} }, reviewed.id, "mcq");
+    expect(item).not.toBeNull();
+    await db.update(schema.lmProgress).set({ cursor: {
+      conceptId: current.id, phase: "practice", i: 0, round: 0, pcount: 3,
+      check: false, checkLog: [], qs: { ...newQuestionState(item!.key, "practice"), review: true },
+    } }).where(and(eq(schema.lmProgress.userId, u.id), eq(schema.lmProgress.courseId, courseId)));
+    const states = async () => new Map((await db.select().from(schema.lmConceptState).where(eq(schema.lmConceptState.userId, u.id))).map((row) => [row.conceptId, row.log]));
+    const before = await states();
+    await expect(answer(u.id, courseId, await solve(item!.key, true))).resolves.toMatchObject({ ok: true });
+    const after = await states();
+    expect(after.get(current.id)).toEqual(before.get(current.id));
+    expect(after.get(reviewed.id)).toEqual([...(before.get(reviewed.id) ?? []), 1]);
+    const [saved] = await db.select().from(schema.lmAnswers).where(and(eq(schema.lmAnswers.userId, u.id), eq(schema.lmAnswers.itemKey, item!.key))).orderBy(desc(schema.lmAnswers.createdAt)).limit(1);
+    expect(saved.conceptId).toBe(reviewed.id);
   });
 
   it("another account cannot read or change this account's progress", async () => {

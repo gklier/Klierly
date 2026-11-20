@@ -126,7 +126,7 @@ async function nextQuestion(userId: string, p: Progress, c: Concept, states: Map
   let key: string | null = null, review = false;
   if (cur.phase === "practice") {
     const all = await readyConcepts(userId, c.courseId);
-    const weak = all.filter((x) => x.id !== c.id && states.get(x.id)!.log.length).sort((a, b) => mastery(states.get(a.id)!) - mastery(states.get(b.id)!))[0];
+    const weak = all.filter((x) => x.id !== c.id && states.get(x.id)?.log.length).sort((a, b) => mastery(states.get(a.id)!) - mastery(states.get(b.id)!))[0];
     const choice = revisitChoice({ practiceCount: cur.pcount, check: cur.check, currentConceptId: c.id, miss: p.miss as MissEntry[], answered: p.answered, weakest: weak ? { key: weak.id } : null });
     if (choice.kind === "miss") { const it = await itemOf(choice.key, userId); if (it && !it.retired) { key = it.key; review = true; } }
     else if (choice.kind === "weak" && weak) { const pk = await pickItem(userId, p, weak.id); if (pk) { key = pk.key; review = true; } }
@@ -222,8 +222,9 @@ export async function answer(userId: string, courseId: string, resp: string, tok
   const p = await loadProgress(userId, courseId);
   const cur = p.cursor; if (!cur?.qs || cur.qs.answered) throw new LearnError("no_question", "There is no open question.");
   if (token !== undefined && token !== screenToken(cur)) throw new LearnError("stale", "That question has moved on. Your answer was not counted; look at the question on screen.");
-  const c = concepts.find((x) => x.id === cur.conceptId)!;
-  const it = await itemOf(cur.qs.key, userId); if (!it) throw new LearnError("gone", "That question is no longer available.");
+  const it = await itemOf(cur.qs.key, userId);
+  const c = concepts.find((concept) => concept.id === it?.conceptId);
+  if (!it || !c) throw new LearnError("gone", "That question is no longer available.");
   const q = it.body, qs = cur.qs;
   let ok: boolean, trap: string | null = null;
   if (q.kind === "mcq") {
@@ -249,7 +250,7 @@ export async function answer(userId: string, courseId: string, resp: string, tok
     p.seen = { ...p.seen, [qs.key]: 1 }; p.seenStems = { ...p.seenStems, [it.stemHash]: 1 };
     const res = applyAnswer(states.get(c.id)!, p.miss as MissEntry[], { key: qs.key, conceptId: c.id, ok, hinted: hinted || (guided && qs.tries > 1), review: Boolean(qs.review), answerCount: p.answered });
     p.miss = res.miss; let st = res.st;
-    if (!guided) {
+    if (!guided && c.id === cur.conceptId) {
       if (cur.check) cur.checkLog.push(ok && !hinted ? 1 : 0);
       const ap = afterPractice(st, cur); st = ap.st;
       if (ap.reteach) cur.reteach = true; // shown on the next press, so the student still sees why this answer was wrong
@@ -303,12 +304,12 @@ export async function studyView(userId: string, courseId: string): Promise<Study
       const scaffold = qs.mode === "guided" && q.kind === "num" ? (cur.round === 0 ? steps.slice(0, -1) : cur.round === 1 ? steps.slice(0, 1) : []) : [];
       // Hint ladder: level 1 recap, 2 first step (or one wrong option struck out), 3 all but the final step (or two struck out). Never the answer.
       const hintTexts: string[] = [];
-      if (qs.hints >= 1) hintTexts.push(`Remember: ${c.short}`);
+      if (qs.hints >= 1) hintTexts.push(`Remember: ${concepts.find((concept) => concept.id === it.conceptId)?.short ?? c.short}`);
       if (qs.hints >= 2) hintTexts.push(q.kind === "num" ? (steps[0] ? `First step: ${steps[0]}` : "Work one step at a time.") : "One wrong option is crossed out below.");
       if (qs.hints >= 3) hintTexts.push(q.kind === "num" ? `Steps so far: ${steps.slice(0, Math.max(1, steps.length - 1)).join(" ")}` : "Two wrong options are crossed out below.");
       const struck = q.kind === "mcq" && q.choices ? q.choices.map((_, i) => i).filter((i) => i !== q.correctIndex).slice(0, qs.hints >= 3 ? 2 : qs.hints >= 2 ? 1 : 0) : [];
       const reveal = qs.answered;
-      const srcTitles = reveal && q.sourceRefs.length ? (await db.select({ t: schema.sourceDocuments.title }).from(schema.sourceChunks).innerJoin(schema.sourceDocuments, eq(schema.sourceDocuments.id, schema.sourceChunks.documentId)).where(inArray(schema.sourceChunks.id, q.sourceRefs.slice(0, 3)))).map((r) => r.t) : [];
+      const srcTitles = reveal && q.sourceRefs.length ? (await db.select({ t: schema.sourceDocuments.title }).from(schema.sourceChunks).innerJoin(schema.sourceDocuments, eq(schema.sourceDocuments.id, schema.sourceChunks.documentId)).where(and(eq(schema.sourceDocuments.userId, userId), eq(schema.sourceDocuments.courseId, courseId), inArray(schema.sourceChunks.id, q.sourceRefs.slice(0, 3))))).map((r) => r.t) : [];
       question = {
         key: qs.key, kind: q.kind, stemHtml: q.stemHtml, choices: q.choices, hints: qs.hints, hintTexts, scaffold, tries: qs.tries, answered: qs.answered, ok: qs.ok, review: Boolean(qs.review),
         wrong: [...(qs.wrong ?? []), ...struck], resp: qs.resp,
