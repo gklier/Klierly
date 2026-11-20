@@ -6,7 +6,7 @@ import { buildNumericItems } from "./items";
 import { afterPractice, applyAnswer, gradeNumeric, isDone, mastery, newQuestionState, nextHintLevel, revisitChoice, scoreOf, type ConceptState, type MissEntry } from "./engine";
 import { loadAiCourse } from "@/lib/ai/generate";
 import { aiStatus } from "@/lib/ai/provider";
-import { runBuild, testNumericSolvers } from "./pipeline";
+import { runBuild, numericSolversEnabled } from "./pipeline";
 
 type Concept = typeof schema.lmConcepts.$inferSelect;
 type Progress = typeof schema.lmProgress.$inferSelect;
@@ -81,7 +81,7 @@ const itemOf = async (key: string, userId: string) => (await db.select().from(sc
 
 /** More validated seeds for a numeric generator, with no AI call: the solver already passed validation. */
 export async function topUp(userId: string, conceptId: string, count = 40) {
-  if (!testNumericSolvers()) return 0;
+  if (!numericSolversEnabled()) return 0;
   const gens = await db.select().from(schema.lmGenerators).where(and(eq(schema.lmGenerators.conceptId, conceptId), eq(schema.lmGenerators.kind, "numeric"), eq(schema.lmGenerators.userId, userId)));
   let added = 0;
   for (const g of gens) {
@@ -134,7 +134,7 @@ async function nextQuestion(userId: string, p: Progress, c: Concept, states: Map
   if (!key) {
     const prefer = cur.phase === "guided" ? "numeric" : undefined;
     let pk = await pickItem(userId, p, c.id, prefer);
-    if (!pk && !testNumericSolvers()) {
+    if (!pk && !numericSolversEnabled()) {
       // A small concept bank can repeat after every unique question has been seen.
       pk = await pickItem(userId, { seen: {}, seenStems: {} }, c.id, "mcq");
       review = Boolean(pk);

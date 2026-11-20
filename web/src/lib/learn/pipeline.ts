@@ -15,7 +15,16 @@ import { hashStr, makeRng } from "./rng";
 import { analysisSchema, e1Schema, e2Schema, e3Schema, graphSchema, lessonSchema, mcqSchema, numericGenSchema, scenarioSchema } from "./schemas";
 import { seedsFor, validateNumericGenerator } from "./validate";
 
-export const testNumericSolvers = () => process.env.LEARN_TEST_NUMERIC_SOLVERS === "true" && new URL(process.env.APP_URL ?? "http://localhost:3000").hostname === "localhost" && new URL(process.env.APP_URL ?? "http://localhost:3000").protocol === "http:";
+/**
+ * Calculation questions need AI-written solver code to run somewhere safe. That is allowed only (a) through a dedicated, isolated solver
+ * container the operator configured (WORKER_SOLVER_URL), or (b) on a local development machine with the explicit test flag. A public
+ * deployment with neither builds conceptual questions only.
+ */
+export const numericSolversEnabled = () => {
+  if (process.env.WORKER_SOLVER_URL?.trim()) return true;
+  const app = new URL(process.env.APP_URL ?? "http://localhost:3000");
+  return process.env.LEARN_TEST_NUMERIC_SOLVERS === "true" && app.hostname === "localhost" && app.protocol === "http:";
+};
 
 const num = (k: string, d: number) => { const v = Number(process.env[k]); return Number.isFinite(v) && v > 0 ? Math.floor(v) : d; };
 /** Bank targets from the spec; lowered only through the environment (for tests or small budgets). */
@@ -290,7 +299,7 @@ export async function runBuild(buildId: string): Promise<void> {
         if (!c.cards.length) await stageLesson(c);
         done++; await setBuild(buildId, { done });
         const cm = await conceptChunks(c.userId, c.courseId, c);
-        if (testNumericSolvers() && c.formulas.length > 0) { const r = await stageNumeric(c, cm); if (r.report.length) log("info", "learn.numeric.notes", { conceptId: c.id, kept: r.good, notes: r.report.slice(0, 4).map((x) => x.slice(0, 120)) }); }
+        if (numericSolversEnabled() && c.formulas.length > 0) { const r = await stageNumeric(c, cm); if (r.report.length) log("info", "learn.numeric.notes", { conceptId: c.id, kept: r.good, notes: r.report.slice(0, 4).map((x) => x.slice(0, 120)) }); }
         done++; await setBuild(buildId, { done });
         const have = await db.select({ n: sql<number>`count(*)::int` }).from(schema.lmItems).where(and(eq(schema.lmItems.conceptId, c.id), eq(schema.lmItems.kind, "mcq")));
         if ((have[0]?.n ?? 0) < Math.min(t.mcq, 5)) await stageMcq(c, cm);

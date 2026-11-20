@@ -171,13 +171,33 @@ async def numeric_compute(request: Request) -> dict[str, Any]:
     return numeric.compute(body.get("fn"), body.get("args", {}))
 
 
-# Only the isolated test worker enables the experimental Python evaluator.
-if os.environ.get("LEARN_TEST_NUMERIC_SOLVERS") == "true":
+def solver_enabled() -> bool:
+    """AI-written solver code runs only where explicitly allowed: a dedicated solver container (WORKER_ROLE=solver),
+    or a local test worker (LEARN_TEST_NUMERIC_SOLVERS=true). The ordinary parsing worker never executes it."""
+    return os.environ.get("WORKER_ROLE") == "solver" or os.environ.get("LEARN_TEST_NUMERIC_SOLVERS") == "true"
+
+
+def require_solver() -> None:
+    if not solver_enabled():
+        raise WorkerError(404, "not_found", "Not Found")
+
+
+@app.post("/sandbox/run", dependencies=[Depends(require_token), Depends(require_solver)])
+def sandbox_run(body: dict[str, Any] = Body(...)) -> dict[str, Any]:
+    """Run an AI-written pure solver for many parameter sets. See app/sandbox.py for what is and is not enforced.
+
+    A plain ``def`` on purpose: FastAPI runs it in a thread, so a slow solver never blocks other requests."""
     from . import sandbox
 
-    @app.post("/sandbox/run", dependencies=[Depends(require_token)])
-    def sandbox_run(body: dict[str, Any] = Body(...)) -> dict[str, Any]:
-        return {"results": sandbox.run_solver(body.get("code"), body.get("params"), body.get("fn", "solve"))}
+    return {"results": sandbox.run_solver(body.get("code"), body.get("params"), body.get("fn", "solve"))}
+
+
+@app.middleware("http")
+async def solver_role_surface(request: Request, call_next):
+    """The solver container exposes nothing but its health check and the sandbox: no parsers, no numeric helpers."""
+    if os.environ.get("WORKER_ROLE") == "solver" and request.url.path not in ("/health", "/sandbox/run"):
+        return error_response(404, "not_found", "Not Found")
+    return await call_next(request)
 
 
 @app.post("/numeric/ols", dependencies=[Depends(require_token)])

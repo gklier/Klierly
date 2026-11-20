@@ -6,6 +6,12 @@ from scipy import stats as sp
 from .conftest import AUTH
 
 
+@pytest.fixture(autouse=True)
+def _solver_on(monkeypatch):
+    """The behaviour tests below need the solver enabled; the last two tests switch it off or change role explicitly."""
+    monkeypatch.setenv("LEARN_TEST_NUMERIC_SOLVERS", "true")
+
+
 def run(client, code, params, expect=200):
     r = client.post("/sandbox/run", json={"code": code, "params": params}, headers=AUTH)
     assert r.status_code == expect, r.text
@@ -72,3 +78,22 @@ def test_limits_on_size_and_count(client):
 
 def test_requires_token(client):
     assert client.post("/sandbox/run", json={"code": "def solve(p):\n    return 1", "params": [{}]}).status_code == 401
+
+
+def test_ordinary_worker_never_runs_solver_code(client, monkeypatch):
+    monkeypatch.delenv("LEARN_TEST_NUMERIC_SOLVERS", raising=False)
+    monkeypatch.delenv("WORKER_ROLE", raising=False)
+    r = client.post("/sandbox/run", json={"code": "def solve(p):\n    return 1", "params": [{}]}, headers=AUTH)
+    assert r.status_code == 404
+
+
+def test_solver_role_exposes_only_health_and_the_sandbox(client, monkeypatch):
+    monkeypatch.delenv("LEARN_TEST_NUMERIC_SOLVERS", raising=False)
+    monkeypatch.setenv("WORKER_ROLE", "solver")
+    ok = client.post("/sandbox/run", json={"code": "def solve(p):\n    return {'answer': 2}", "params": [{}]}, headers=AUTH)
+    assert ok.status_code == 200 and ok.json()["results"][0]["value"]["answer"] == 2
+    assert client.get("/health").status_code == 200
+    for path in ("/numeric/functions", "/parse", "/parse-text", "/numeric/compute", "/numeric/ols"):
+        assert client.get(path, headers=AUTH).status_code == 404, path
+        assert client.post(path, headers=AUTH, json={}).status_code == 404, path
+    assert client.post("/sandbox/run", json={"code": "def solve(p):\n    return 1", "params": [{}]}).status_code == 401  # still needs its token

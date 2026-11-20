@@ -6,7 +6,7 @@ import { BuildPoller } from "@/components/learn-progress";
 import { db, schema } from "@/db";
 import { requireUser } from "@/lib/auth";
 import { getCourse } from "@/lib/courses";
-import { suggestModules, testNumericSolvers } from "@/lib/learn/pipeline";
+import { suggestModules, numericSolversEnabled } from "@/lib/learn/pipeline";
 import { conceptList, guideStatus } from "@/lib/learn/service";
 
 export const metadata = { title: "Learn" };
@@ -70,7 +70,7 @@ export default async function LearnPage({ params }: { params: Promise<{ courseId
       <div className="max-w-2xl space-y-5">
         <h1 className="text-2xl font-semibold">Learn</h1>
         {build?.status === "failed" && <p role="alert" className="notice notice-bad"><strong>The last build did not finish.</strong> {build.error}</p>}
-        <p className="text-muted">Pick your modules to build lessons and guided practice from your course material. {testNumericSolvers() ? "Worked examples and calculation drills are available." : "This preview builds conceptual questions. For calculations, use Practice."}</p>
+        <p className="text-muted">Pick your modules to build lessons and guided practice from your course material. {numericSolversEnabled() ? "Worked examples and calculation drills are available." : "This preview builds conceptual questions. For calculations, use Practice."}</p>
         {await picker()}
       </div>
     );

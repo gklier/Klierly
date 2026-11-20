@@ -13,12 +13,12 @@ export class WorkerError extends Error {
   get permanent() { return this.status >= 400 && this.status < 500 && this.status !== 408 && this.status !== 429; }
 }
 
-async function call<T>(path: string, init: RequestInit, timeoutMs = 120_000): Promise<T> {
+async function call<T>(path: string, init: RequestInit, timeoutMs = 120_000, target?: { url: string; token: string }): Promise<T> {
   let res: Response;
   try {
-    res = await fetch(`${env.workerUrl}${path}`, {
+    res = await fetch(`${target?.url ?? env.workerUrl}${path}`, {
       ...init,
-      headers: { ...(init.headers ?? {}), "X-Worker-Token": env.workerToken },
+      headers: { ...(init.headers ?? {}), "X-Worker-Token": target?.token ?? env.workerToken },
       signal: AbortSignal.timeout(timeoutMs),
     });
   } catch {
@@ -66,6 +66,8 @@ export async function workerHealth(): Promise<boolean> {
 export type SolverResult = { ok: true; value: unknown } | { ok: false; error: string };
 /** Run AI-written, AST-checked solver code in the worker's sandbox, one result per parameter set. */
 export async function runSolver(code: string, params: Record<string, unknown>[], fn = "solve"): Promise<SolverResult[]> {
-  const { results } = await call<{ results: SolverResult[] }>("/sandbox/run", json({ code, params, fn }), 40_000);
+  // A configured solver container is the only place this runs in a hosted deployment; without one it falls back to the local worker (development and tests).
+  const target = env.solverUrl ? { url: env.solverUrl, token: env.solverToken } : undefined;
+  const { results } = await call<{ results: SolverResult[] }>("/sandbox/run", json({ code, params, fn }), 40_000, target);
   return results;
 }
