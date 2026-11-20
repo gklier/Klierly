@@ -569,7 +569,7 @@ export const lmConceptState = pgTable("lm_concept_state", {
 }, (t) => [primaryKey({ columns: [t.userId, t.conceptId] })]);
 
 export type LmQuestionState = { key: string; mode: "guided" | "practice" | "check"; hints: number; tries: number; answered: boolean; ok: boolean | null; resp: string | number | null; review?: boolean; trap?: string | null; wrong?: number[] };
-export type LmCursor = { conceptId: string; phase: "learn" | "worked" | "guided" | "practice" | "done"; i: number; round: number; pcount: number; check: boolean; checkLog: number[]; qs: LmQuestionState | null };
+export type LmCursor = { conceptId: string; phase: "learn" | "worked" | "guided" | "practice" | "done"; i: number; round: number; pcount: number; check: boolean; checkLog: number[]; qs: LmQuestionState | null; /** Set after eight attempts without mastery: re-teach on the NEXT press, after the student has seen the feedback. */ reteach?: boolean };
 
 /** Where the student is, plus what they have seen and missed. Server-side so it follows them across devices. */
 export const lmProgress = pgTable("lm_progress", {

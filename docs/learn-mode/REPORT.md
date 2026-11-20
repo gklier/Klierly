@@ -14,12 +14,12 @@
 | Suite | Result |
 |---|---|
 | Worker (pytest) | 43 passed (17 new: sandbox escapes, runaway loops, memory bombs, NaN, limits, scipy agreement) |
-| Web integration and unit (vitest, real Postgres + worker, mock AI) | 138 passed (37 new: engine 10, pipeline 16, study service 11) |
+| Web integration and unit (vitest, real Postgres + worker, mock AI) | 139 passed (38 new: engine 10, pipeline 16, study service 12) |
 | Browser (Playwright, production build) | 53 passed (9 new Learn Mode tests with screenshots in `docs/learn-mode/screenshots/`), zero console errors |
 | Extension | 17 passed |
 | Types, lint, `npm audit` | clean |
 
-Bugs found and fixed while testing: a trap that coincided with the right answer made whole generators fail (now dropped per instance); duplicated stems across concepts produced empty generators (now rejected up front); a blocking sandbox endpoint could stall file parsing (now runs in a thread); the build hit the per-minute AI limit (now waits instead of failing); the captions button could be clicked before its page was ready (fixed in the extension) and a flaky discovery test waited for the wrong thing.
+Bugs found and fixed while testing: **a wrong answer that triggered re-teaching skipped the feedback explaining the mistake (found by CI; now the feedback is shown and re-teaching happens on the next press)**; a trap that coincided with the right answer made whole generators fail (now dropped per instance); duplicated stems across concepts produced empty generators (now rejected up front); a blocking sandbox endpoint could stall file parsing (now runs in a thread); the build hit the per-minute AI limit (now waits instead of failing); the captions button could be clicked before its page was ready (fixed in the extension) and a flaky discovery test waited for the wrong thing.
 
 ## What is NOT built (be clear before relying on this)
 - **Tutor drawer** (Prompt G is written, not wired), **exam simulation mode**, **concept map**, **formula sheet screen**, **session timer chips**, **visual labs** (and Prompt F), **add-on picker** and every add-on (flashcards, daily plan, extra packs, listen mode, practice exams), **mistake diagnosis** (Prompt H), **video lessons** (Prompts I and J, Manim). None of these exist in the UI.

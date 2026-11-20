@@ -138,6 +138,32 @@ describe("the guided path", () => {
     expect(f.correctIndex).toBeGreaterThanOrEqual(0);
   }, 60_000);
 
+  it("eight attempts without mastery re-teach the concept, but only AFTER the feedback for the last answer was shown", async () => {
+    const concepts = await conceptList(u.id, courseId);
+    let v = (await studyView(u.id, courseId))!;
+    // Drive to a practice question on a concept, then miss repeatedly until the re-teach flag is raised.
+    for (let n = 0; n < 60 && !(v.phase === "practice" && v.question && !v.question.answered); n++) {
+      if (v.question && !v.question.answered) await answer(u.id, courseId, await solve(v.question.key, true));
+      await advance(u.id, courseId); v = (await studyView(u.id, courseId))!;
+    }
+    expect(v.phase).toBe("practice");
+    const conceptId = v.concept.id;
+    let sawReteachFlag = false;
+    for (let n = 0; n < 12 && !sawReteachFlag; n++) {
+      if (!(v.question && !v.question.answered)) { await advance(u.id, courseId); v = (await studyView(u.id, courseId))!; continue; }
+      await answer(u.id, courseId, await solve(v.question.key, false));
+      v = (await studyView(u.id, courseId))!;
+      expect(v.question, "the wrong answer's feedback is still on screen").not.toBeNull();
+      expect(v.question!.feedback).not.toBeNull();
+      const [prog] = await db.select().from(schema.lmProgress).where(and(eq(schema.lmProgress.userId, u.id), eq(schema.lmProgress.courseId, courseId)));
+      sawReteachFlag = Boolean(prog.cursor?.reteach);
+      if (sawReteachFlag) { expect(v.phase).toBe("practice"); await advance(u.id, courseId); v = (await studyView(u.id, courseId))!; expect(v).toMatchObject({ phase: "worked", concept: { id: conceptId } }); }
+      else { await advance(u.id, courseId); v = (await studyView(u.id, courseId))!; }
+    }
+    expect(sawReteachFlag).toBe(true);
+    expect(concepts.length).toBe(6);
+  }, 90_000);
+
   it("a reload mid-question returns the same question, hint level and progress", async () => {
     let before = (await studyView(u.id, courseId))!;
     for (let n = 0; n < 40 && !(before.question && !before.question.answered); n++) {

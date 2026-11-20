@@ -164,7 +164,12 @@ export async function advance(userId: string, courseId: string, token?: string) 
   } else if (cur.phase === "practice") {
     if (!cur.qs?.answered) throw new LearnError("unanswered", "Answer the question first.");
     cur.qs = null;
-    if (isDone(states.get(c.id)!.status)) cur.phase = "done";
+    if (isDone(states.get(c.id)!.status)) { cur.phase = "done"; cur.reteach = false; }
+    else if (cur.reteach) { // eight attempts without mastery: teach it again, then a fresh run of practice
+      const st = states.get(c.id)!; await saveState(userId, c.id, { ...st, baseIndex: st.log.length });
+      cur.reteach = false; cur.phase = "worked"; cur.i = 0; cur.pcount = 0;
+      await saveProgress(p); return;
+    }
   } else if (cur.phase === "done") {
     const next = concepts.find((x) => !isDone(states.get(x.id)!.status));
     if (!next) { p.cursor = null; await saveProgress(p); return; }
@@ -220,7 +225,7 @@ export async function answer(userId: string, courseId: string, resp: string, tok
     if (!guided) {
       if (cur.check) cur.checkLog.push(ok && !hinted ? 1 : 0);
       const ap = afterPractice(st, cur); st = ap.st;
-      if (ap.reteach) { st = { ...st, baseIndex: st.log.length }; cur.phase = "worked"; cur.i = 0; cur.qs = null; await saveState(userId, c.id, st); await saveProgress(p); return { ok }; }
+      if (ap.reteach) cur.reteach = true; // shown on the next press, so the student still sees why this answer was wrong
     }
     await saveState(userId, c.id, st);
   }
