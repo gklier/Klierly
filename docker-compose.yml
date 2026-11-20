@@ -35,6 +35,28 @@ services:
     security_opt: ["no-new-privileges:true"]
     networks: [backend]
 
+  # OPTIONAL, off unless COMPOSE_PROFILES=solver: runs AI-written solver code for Learn Mode calculation questions.
+  # It is a separate container from the parsing worker, with its own token, on its own network that contains only
+  # this service and the web app. That network is internal (no route to the internet) and does not include the
+  # database, so a solver that misbehaves can reach neither. Only /health and /sandbox/run are served.
+  solver:
+    profiles: ["solver"]
+    mem_limit: 1g
+    cpus: 1
+    pids_limit: 64
+    build: ./worker
+    restart: unless-stopped
+    environment:
+      WORKER_ROLE: solver
+      # Compose reads this even when the profile is off, so it must not be a required variable (that would stop the whole stack).
+      # With an empty token the solver refuses every call (500 "WORKER_TOKEN is not set"), so a missing secret fails closed.
+      WORKER_TOKEN: ${SOLVER_TOKEN:-}
+    read_only: true
+    tmpfs: [/tmp]
+    cap_drop: [ALL]
+    security_opt: ["no-new-privileges:true"]
+    networks: [solver-net]
+
   web:
     mem_limit: 2g
     cpus: 1.5
@@ -52,6 +74,9 @@ services:
       APP_URL: ${APP_URL:-http://localhost:3000}
       WORKER_URL: http://worker:8001
       WORKER_TOKEN: ${WORKER_TOKEN}
+      # Set both (and COMPOSE_PROFILES=solver) to enable calculation questions in Learn Mode. Empty = conceptual questions only.
+      WORKER_SOLVER_URL: ${WORKER_SOLVER_URL:-}
+      WORKER_SOLVER_TOKEN: ${SOLVER_TOKEN:-}
       MAX_UPLOAD_MB: ${MAX_UPLOAD_MB:-25}
       INVITE_CODE: ${INVITE_CODE:-}
       TZ: ${TZ:-America/New_York}
@@ -75,7 +100,7 @@ services:
       - "127.0.0.1:3000:3000"
     cap_drop: [ALL]
     security_opt: ["no-new-privileges:true"]
-    networks: [backend, edge]
+    networks: [backend, edge, solver-net]
 
 volumes:
   db-data:
@@ -83,5 +108,7 @@ volumes:
 
 networks:
   backend:
+    internal: true
+  solver-net:
     internal: true
   edge:

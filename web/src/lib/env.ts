@@ -16,6 +16,9 @@ export const env = {
   get appUrl() { return (process.env.APP_URL ?? "http://localhost:3000").replace(/\/$/, ""); },
   get workerUrl() { return (process.env.WORKER_URL ?? "http://127.0.0.1:8001").replace(/\/$/, ""); },
   get workerToken() { return required("WORKER_TOKEN"); },
+  /** Optional dedicated solver container (WORKER_ROLE=solver): the only place AI-written solver code may run in a hosted deployment. */
+  get solverUrl() { return (process.env.WORKER_SOLVER_URL ?? "").trim().replace(/\/$/, "") || null; },
+  get solverToken() { return required("WORKER_SOLVER_TOKEN"); },
   get uploadDir() { return path.resolve(process.env.UPLOAD_DIR ?? "./data/uploads"); },
   get maxUploadBytes() { return Number(process.env.MAX_UPLOAD_MB ?? 25) * 1024 * 1024; },
   get inviteCode() { return process.env.INVITE_CODE?.trim() || null; },
