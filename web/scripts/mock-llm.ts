@@ -103,6 +103,8 @@ function supplement(prompt: string) {
   return { covered: `[mock] The notes say: ${pool[0].s}`, gaps: [{ point: "[mock] A prerequisite idea", explanation: "[mock] This is general background knowledge written by the test server, deliberately not found in the course material." }, { point: "[mock] A common mistake", explanation: "[mock] Students often confuse the quantity being tested with the quantity being estimated." }], verify: ["[mock] Check the notation your instructor uses for this test."] };
 }
 
+import { learnReply } from "./mock-llm-learn";
+
 export function startMockLlm(port = 4010): Promise<http.Server> {
   const server = http.createServer((req, res) => {
     const send = (status: number, body: unknown) => { res.writeHead(status, { "Content-Type": "application/json" }); res.end(JSON.stringify(body)); };
@@ -121,6 +123,7 @@ export function startMockLlm(port = 4010): Promise<http.Server> {
       else if (body.model === "mock-insufficient" && system.includes("JSON")) content = JSON.stringify({ insufficient: true, reason: "The sources do not cover this topic.", questions: [], summary: "", keyPoints: [] });
       else if (system.includes("practice questions")) content = "```json\n" + JSON.stringify(questions(user)) + "\n```";
       else if (system.includes("study note")) content = JSON.stringify(learnNote(user));
+      else if (learnReply(system, user) !== null) content = JSON.stringify(learnReply(system, user));
       else if (system.includes("study summary")) content = JSON.stringify(summary(user, body.model === "mock-copycat"));
       else if (system.includes("fill gaps")) content = JSON.stringify(supplement(user));
       else if (system.includes("study topics")) content = JSON.stringify(topics(user));

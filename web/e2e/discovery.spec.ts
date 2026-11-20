@@ -81,6 +81,12 @@ const openDiscover = async (pace = 60) => {
   await page.goto(`chrome-extension://${extId}/discover.html?tabId=${await lmsTabId()}&url=${encodeURIComponent(`${LMS}/courses/77`)}&pace=${pace}`);
   return page;
 };
+
+/** The lecture page embeds a player from another origin. Wait until that frame has really loaded, as a student would before pressing play. */
+async function playerFrameLoaded(page: Page, fragment: string) {
+  await expect.poll(() => page.frames().some((f) => f.url().includes(fragment)), { timeout: 15_000 }).toBe(true);
+  await page.frames().find((f) => f.url().includes(fragment))!.waitForLoadState("load");
+}
 const rowFor = (page: Page, title: string) => page.locator("#run-list li", { hasText: title });
 
 test("the popup offers course discovery on a course site", async () => {
@@ -228,6 +234,7 @@ test("stop and resume: finished items stay, the rest continues later", async () 
 test("lecture captions: text tracks on the page and inside an embedded player are imported with timestamps", async () => {
   await lms.goto(`${LMS}/courses/77/pages/lecture-21`);
   await expect(lms.getByRole("heading", { name: "Lecture video" })).toBeVisible();
+  await playerFrameLoaded(lms, "/player");
   const popup = await ctx.newPage();
   await popup.goto(`chrome-extension://${extId}/popup.html?tabId=${await lmsTabId()}`);
   await expect(popup.getByRole("link", { name: "Import its captions or transcript" })).toBeVisible();
@@ -262,6 +269,7 @@ test("lecture captions: text tracks on the page and inside an embedded player ar
 test("Mediasite: the lecture transcript is pulled the way the player does, from inside the embedded player", async () => {
   await lms.goto(`${LMS}/courses/77/pages/lecture-22`);
   await expect(lms.getByRole("heading", { name: "Lecture" })).toBeVisible();
+  await playerFrameLoaded(lms, "/Mediasite/Play/");
   const before = imports.length;
   const c = await ctx.newPage();
   await c.goto(`chrome-extension://${extId}/captions.html?tabId=${await lmsTabId()}`);

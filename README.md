@@ -114,6 +114,10 @@ It reads rendered pages in your own tab and does not use the Canvas API. What th
 what has not been established (institutional permission, real Canvas compatibility): `docs/LMS_ACCESS.md`.
 More detail: `extension/README.md`.
 
+## Learn Mode (guided study from your imported course)
+
+**Learn** in a course: pick the modules you are studying (exam pages pre-select them), press **Build my study guide**, then **STUDY FOR MY EXAM**. Klierly builds lessons, worked examples and a large bank of checked questions in one go; numbers are computed by code and verified by an independent solver. Progress is saved so you resume exactly where you left off. What is and is not built, how it works and the cost warning: `docs/learn-mode/`.
+
 ## Class library (share AI summaries with classmates)
 
 In the extension's Discover page, tick the terms and choose **Join the class library** while you have your Canvas

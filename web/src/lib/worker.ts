@@ -62,3 +62,10 @@ export async function workerHealth(): Promise<boolean> {
     return false;
   }
 }
+
+export type SolverResult = { ok: true; value: unknown } | { ok: false; error: string };
+/** Run AI-written, AST-checked solver code in the worker's sandbox, one result per parameter set. */
+export async function runSolver(code: string, params: Record<string, unknown>[], fn = "solve"): Promise<SolverResult[]> {
+  const { results } = await call<{ results: SolverResult[] }>("/sandbox/run", json({ code, params, fn }), 40_000);
+  return results;
+}
