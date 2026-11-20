@@ -1,0 +1,3 @@
+TASK: Independent verification. You will see a question template and the names and types of its parameters. You have NOT seen the author's solution. Write your own Python solver from the question alone.
+Write def solve(p): returning {"answer": number}. No imports. math.* and stats.* are available (norm_cdf, norm_ppf, t_cdf, t_sf, t_ppf, chi2_cdf, chi2_sf, chi2_ppf, f_cdf, f_sf, f_ppf, binom_pmf, binom_cdf, mean, stdev, variance, median, logistic). Parameters arrive in the dict p under the given names; list parameters are Python lists. Use the question's own stated conventions.
+Schema: { "solver_code": string }
