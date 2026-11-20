@@ -198,7 +198,8 @@ export async function advance(userId: string, courseId: string, token?: string) 
       await saveProgress(p); return;
     }
   } else if (cur.phase === "done") {
-    const next = concepts.find((x) => !isDone(states.get(x.id)!.status));
+    const unfinished = concepts.filter((x) => !isDone(states.get(x.id)!.status));
+    const next = unfinished.find((x) => x.position > c.position) ?? unfinished[0];
     if (!next) { p.cursor = null; await saveProgress(p); return; }
     await enterConcept(userId, p, next, states); return;
   }

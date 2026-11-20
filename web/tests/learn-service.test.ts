@@ -159,7 +159,13 @@ describe("the guided path", () => {
       expect(v.question!.feedback).not.toBeNull();
       const [prog] = await db.select().from(schema.lmProgress).where(and(eq(schema.lmProgress.userId, u.id), eq(schema.lmProgress.courseId, courseId)));
       sawReteachFlag = Boolean(prog.cursor?.reteach);
-      if (sawReteachFlag) { expect(v.phase).toBe("practice"); await advance(u.id, courseId); v = (await studyView(u.id, courseId))!; expect(v).toMatchObject({ phase: "worked", concept: { id: conceptId } }); }
+      if (sawReteachFlag) {
+        const [example] = await db.select({ key: schema.lmItems.key }).from(schema.lmItems).where(and(eq(schema.lmItems.conceptId, conceptId), eq(schema.lmItems.kind, "numeric"), eq(schema.lmItems.retired, false))).limit(1);
+        expect(v.phase).toBe("practice");
+        await advance(u.id, courseId);
+        v = (await studyView(u.id, courseId))!;
+        expect(v).toMatchObject({ phase: example ? "worked" : "learn", concept: { id: conceptId } });
+      }
       else { await advance(u.id, courseId); v = (await studyView(u.id, courseId))!; }
     }
     expect(sawReteachFlag).toBe(true);

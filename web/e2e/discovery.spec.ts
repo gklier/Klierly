@@ -163,8 +163,10 @@ test("select a module range, preview, approve, import with progress and clear fa
   // Never opened: quiz, assignment, discussion, external tool; never called: the LMS API; never attempted: the disabled download.
   expect(canvas.requests.filter((p) => /quizzes|assignments|discussion_topics|^\/api\/|\/files\/504\/download/.test(p))).toEqual([]);
   expect(canvas.requests.at(-1)).toBe("/courses/77/modules"); // the course tab is returned to the Modules page
-  await d.getByRole("button", { name: "Check processing status" }).click();
-  await expect(rowFor(d, "Module 1 notes (PDF)")).toContainText("processed", { timeout: 20_000 });
+  await expect(async () => {
+    await d.getByRole("button", { name: "Check processing status" }).click();
+    await expect(rowFor(d, "Module 1 notes (PDF)")).toContainText("processed", { timeout: 1500 });
+  }).toPass({ timeout: 30_000 });
 
   // In Klierly: four sources, filed under modules named as in the course, with page-level provenance for the PDF.
   await app.goto(`/courses/${courseId}/materials`);

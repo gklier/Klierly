@@ -51,7 +51,7 @@ test("admin approves a requested account and disables its sessions", async ({ pa
   await student.waitForURL("/");
   await student.goto(url);
   await student.getByRole("button", { name: "Create a passkey", exact: true }).click();
-  await expect(student.getByRole("alert")).toBeVisible();
+  await expect(student.locator('p[role="alert"]')).toBeVisible();
   const account = page.locator('div.border-t').filter({ hasText: "approved@e2e.test" });
   await account.getByRole("button", { name: "Disable account and revoke access", exact: true }).click();
   await expect(account).toContainText("Account disabled and access revoked.");
