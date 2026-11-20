@@ -5,7 +5,7 @@ Learn Mode's calculation questions are made by AI-written Python (`solve(p)`), r
 ## What is enforced
 - The ordinary parsing worker never executes solver code (`/sandbox/run` returns 404 there).
 - A separate **solver** container (`WORKER_ROLE=solver`) serves only `/health` and `/sandbox/run`: no parsers, no numeric helpers.
-- It has its **own secret** (`SOLVER_TOKEN`), different from `WORKER_TOKEN`, so a leak of one does not open the other.
+- It has its **own secret** (`SOLVER_TOKEN`), different from `WORKER_TOKEN`, so a leak of one does not open the other. If the secret is empty the solver refuses every call, so a missing secret fails closed. (It is not a *required* compose variable, because Compose reads it even when the solver is switched off.)
 - It sits on its **own Docker network** (`solver-net`, `internal: true`) shared only with the web app: no route to the internet and no route to the database or the parsing worker.
 - The container is read-only, drops all capabilities, cannot gain privileges, and is limited to 1 CPU, 1 GB and 64 processes.
 - Inside it, each batch runs in a fresh `python -I` process: an AST allowlist (no imports, no dunder or most attribute access), CPU, memory and file-size limits, an empty environment and a wall-clock timeout. See `worker/app/sandbox.py`.

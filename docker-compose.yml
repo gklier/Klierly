@@ -48,7 +48,9 @@ services:
     restart: unless-stopped
     environment:
       WORKER_ROLE: solver
-      WORKER_TOKEN: ${SOLVER_TOKEN:?set SOLVER_TOKEN in .env (a different secret from WORKER_TOKEN)}
+      # Compose reads this even when the profile is off, so it must not be a required variable (that would stop the whole stack).
+      # With an empty token the solver refuses every call (500 "WORKER_TOKEN is not set"), so a missing secret fails closed.
+      WORKER_TOKEN: ${SOLVER_TOKEN:-}
     read_only: true
     tmpfs: [/tmp]
     cap_drop: [ALL]
