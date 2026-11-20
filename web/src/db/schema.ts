@@ -480,3 +480,144 @@ export const studySessions = pgTable("study_sessions", {
   createdAt: createdAt(),
   updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
 }, (t) => [index("study_sessions_owner_course_idx").on(t.userId, t.courseId, t.updatedAt)]);
+// ---------------------------------------------------------------- Learn Mode (additive; every table is new)
+
+/** One "Build my study guide" run for the chosen modules. Resumable: stages record their own progress. */
+export const lmBuilds = pgTable("lm_builds", {
+  id: id(),
+  userId: uuid("user_id").notNull().references(() => users.id, { onDelete: "cascade" }),
+  courseId: uuid("course_id").notNull().references(() => courses.id, { onDelete: "cascade" }),
+  moduleIds: jsonb("module_ids").$type<string[]>().notNull(),
+  status: text("status").$type<"queued" | "running" | "ready" | "failed">().notNull().default("queued"),
+  stage: text("stage").notNull().default("queued"),
+  done: integer("done").notNull().default(0),
+  total: integer("total").notNull().default(0),
+  /** Prompt A output: exam scope with evidence, conflicts, missing materials. */
+  analysis: jsonb("analysis").$type<Record<string, unknown>>(),
+  error: text("error"),
+  createdAt: createdAt(),
+  finishedAt: timestamp("finished_at", { withTimezone: true }),
+}, (t) => [index("lm_builds_course_idx").on(t.courseId)]);
+
+export type LmCard = { heading: string; bodyHtml: string };
+export type LmFormula = { name: string; text: string; note?: string };
+
+export const lmConcepts = pgTable("lm_concepts", {
+  id: id(),
+  userId: uuid("user_id").notNull().references(() => users.id, { onDelete: "cascade" }),
+  courseId: uuid("course_id").notNull().references(() => courses.id, { onDelete: "cascade" }),
+  moduleId: uuid("module_id").references(() => modules.id, { onDelete: "set null" }),
+  /** Stable id the model used inside one build (for prerequisites); not shown to the student. */
+  slug: text("slug").notNull(),
+  title: text("title").notNull(),
+  position: integer("position").notNull(),
+  prerequisites: jsonb("prerequisites").$type<string[]>().notNull().default([]),
+  minutes: integer("minutes").notNull().default(10),
+  why: text("why").notNull().default(""),
+  short: text("short").notNull().default(""),
+  altExplanation: text("alt_explanation").notNull().default(""),
+  cards: jsonb("cards").$type<LmCard[]>().notNull().default([]),
+  formulas: jsonb("formulas").$type<LmFormula[]>().notNull().default([]),
+  instructorRules: jsonb("instructor_rules").$type<{ rule: string; evidence: string[] }[]>().notNull().default([]),
+  sourceRefs: jsonb("source_refs").$type<string[]>().notNull().default([]),
+  status: text("status").$type<"draft" | "ready" | "failed">().notNull().default("draft"),
+  promptVersion: text("prompt_version").notNull().default(""),
+  model: text("model").notNull().default(""),
+  inputHash: text("input_hash").notNull().default(""),
+  createdAt: createdAt(),
+}, (t) => [uniqueIndex("lm_concepts_slug_uq").on(t.courseId, t.slug), index("lm_concepts_course_idx").on(t.courseId, t.position)]);
+
+export type NumericSpec = {
+  params: { name: string; type: "int" | "float" | "choice" | "list"; range?: [number, number]; values?: (number | string)[]; decimals?: number; length?: [number, number] }[];
+  stemTemplate: string;
+  stepsTemplates: string[];
+  traps: { message: string }[];
+  assumptions: string[];
+};
+export type McqSpec = { items: { stem: string; options: { text: string; why: string }[]; correctIndex: number; skill: string; sourceRefs: string[] }[] };
+export type ScenarioSpec = { items: { scenario: string; correctMethod: string; temptingAlternative: string; whyCorrect: string; whyAlternativeWrong: string; clues: string[] }[] };
+
+export const lmGenerators = pgTable("lm_generators", {
+  id: id(),
+  userId: uuid("user_id").notNull().references(() => users.id, { onDelete: "cascade" }),
+  courseId: uuid("course_id").notNull().references(() => courses.id, { onDelete: "cascade" }),
+  conceptId: uuid("concept_id").notNull().references(() => lmConcepts.id, { onDelete: "cascade" }),
+  kind: text("kind").$type<"numeric" | "mcq" | "scenario">().notNull(),
+  difficulty: integer("difficulty").notNull().default(2),
+  spec: jsonb("spec").$type<NumericSpec | McqSpec | ScenarioSpec>().notNull(),
+  /** Numeric only: pure Python `solve(p)` (and optional `traps(p)`), run in the worker sandbox. */
+  solverCode: text("solver_code"),
+  solverHash: text("solver_hash"),
+  validatedAt: timestamp("validated_at", { withTimezone: true }),
+  validationReport: jsonb("validation_report").$type<Record<string, unknown>>().notNull().default({}),
+  sourceRefs: jsonb("source_refs").$type<string[]>().notNull().default([]),
+  promptVersion: text("prompt_version").notNull().default(""),
+  model: text("model").notNull().default(""),
+  createdAt: createdAt(),
+}, (t) => [index("lm_generators_concept_idx").on(t.conceptId)]);
+
+export type LmItem = {
+  stemHtml: string; kind: "num" | "mcq";
+  answer: number | null; tolerance: number; choices: string[] | null; correctIndex: number | null; whyEach: string[] | null;
+  steps: string[]; traps: { value: number; message: string }[]; sourceRefs: string[];
+};
+
+/** A concrete, validated question. Key = generatorId:seed (or :index for fixed-text kinds), so it regenerates from its key. */
+export const lmItems = pgTable("lm_items", {
+  key: text("key").primaryKey(),
+  userId: uuid("user_id").notNull().references(() => users.id, { onDelete: "cascade" }),
+  courseId: uuid("course_id").notNull().references(() => courses.id, { onDelete: "cascade" }),
+  conceptId: uuid("concept_id").notNull().references(() => lmConcepts.id, { onDelete: "cascade" }),
+  generatorId: uuid("generator_id").notNull().references(() => lmGenerators.id, { onDelete: "cascade" }),
+  kind: text("kind").$type<"numeric" | "mcq" | "scenario">().notNull(),
+  stemHash: text("stem_hash").notNull(),
+  body: jsonb("body").$type<LmItem>().notNull(),
+  /** Set by "Report a problem": the item is hidden from everyone until auto-repair finishes. */
+  retired: boolean("retired").notNull().default(false),
+  createdAt: createdAt(),
+}, (t) => [uniqueIndex("lm_items_stem_uq").on(t.courseId, t.stemHash), index("lm_items_concept_idx").on(t.conceptId, t.retired)]);
+
+export const lmConceptState = pgTable("lm_concept_state", {
+  userId: uuid("user_id").notNull().references(() => users.id, { onDelete: "cascade" }),
+  conceptId: uuid("concept_id").notNull().references(() => lmConcepts.id, { onDelete: "cascade" }),
+  status: text("status").$type<"new" | "learning" | "practiced" | "solid">().notNull().default("new"),
+  /** Scores of recent answers: 1 correct unaided, 0.5 correct with a hint, 0 wrong. */
+  log: jsonb("log").$type<number[]>().notNull().default([]),
+  baseIndex: integer("base_index").notNull().default(0),
+  updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
+}, (t) => [primaryKey({ columns: [t.userId, t.conceptId] })]);
+
+export type LmQuestionState = { key: string; mode: "guided" | "practice" | "check"; hints: number; tries: number; answered: boolean; ok: boolean | null; resp: string | number | null; review?: boolean; trap?: string | null; wrong?: number[] };
+export type LmCursor = { conceptId: string; phase: "learn" | "worked" | "guided" | "practice" | "done"; i: number; round: number; pcount: number; check: boolean; checkLog: number[]; qs: LmQuestionState | null; /** Set after eight attempts without mastery: re-teach on the NEXT press, after the student has seen the feedback. */ reteach?: boolean };
+
+/** Where the student is, plus what they have seen and missed. Server-side so it follows them across devices. */
+export const lmProgress = pgTable("lm_progress", {
+  userId: uuid("user_id").notNull().references(() => users.id, { onDelete: "cascade" }),
+  courseId: uuid("course_id").notNull().references(() => courses.id, { onDelete: "cascade" }),
+  cursor: jsonb("cursor").$type<LmCursor | null>(),
+  miss: jsonb("miss").$type<{ key: string; conceptId: string; after: number }[]>().notNull().default([]),
+  seen: jsonb("seen").$type<Record<string, 1>>().notNull().default({}),
+  seenStems: jsonb("seen_stems").$type<Record<string, 1>>().notNull().default({}),
+  answered: integer("answered").notNull().default(0),
+  correctUnaided: integer("correct_unaided").notNull().default(0),
+  updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
+}, (t) => [primaryKey({ columns: [t.userId, t.courseId] })]);
+
+export const lmAnswers = pgTable("lm_answers", {
+  id: id(),
+  userId: uuid("user_id").notNull().references(() => users.id, { onDelete: "cascade" }),
+  itemKey: text("item_key").notNull(),
+  conceptId: uuid("concept_id").notNull().references(() => lmConcepts.id, { onDelete: "cascade" }),
+  ok: boolean("ok").notNull(),
+  hinted: boolean("hinted").notNull(),
+  mode: text("mode").notNull(),
+  createdAt: createdAt(),
+}, (t) => [index("lm_answers_user_idx").on(t.userId, t.conceptId)]);
+
+export const lmReports = pgTable("lm_reports", {
+  id: id(),
+  userId: uuid("user_id").notNull().references(() => users.id, { onDelete: "cascade" }),
+  itemKey: text("item_key").notNull(),
+  note: text("note").notNull().default(""),
+  createdAt: createdAt(),
+});

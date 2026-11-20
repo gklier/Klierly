@@ -98,6 +98,7 @@ async function init() {
   });
   $('skip').addEventListener('click', () => { $('step-access').hidden = true; $('step-read').hidden = false; });
   $('read').addEventListener('click', read);
+  $('read').disabled = false; // enabled only once the page is wired, so an early click is not silently lost
   $('import').addEventListener('click', doImport);
   await showStep();
 }

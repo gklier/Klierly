@@ -7,6 +7,7 @@ import { Icon } from "./icons";
 const ITEMS = [
   { slug: "", label: "Overview", icon: "home" },
   { slug: "/study", label: "Study", icon: "spark" },
+  { slug: "/learn", label: "Learn", icon: "spark" },
   { slug: "/materials", label: "Materials", icon: "file" },
   { slug: "/plan", label: "Study plan", icon: "calendar" },
   { slug: "/practice", label: "Practice", icon: "target" },

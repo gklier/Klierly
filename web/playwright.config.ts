@@ -23,7 +23,10 @@ export default defineConfig({
       env: { ...env, DATABASE_URL: E2E_DATABASE_URL, APP_URL: `http://localhost:${PORT}`, INVITE_CODE: "e2e-invite", ADMIN_EMAILS: "founder@e2e.test,operator@e2e.test",
         // Managed AI points at the deterministic mock: the zero-configuration path is tested, real inference is not.
         MANAGED_AI_BASE_URL: `http://127.0.0.1:${LLM_PORT}/v1`, MANAGED_AI_API_KEY: "test-key", MANAGED_AI_MODEL: "mock-cheap", MANAGED_AI_MODEL_STRONG: "mock-strong",
-        MANAGED_AI_USER_DAILY_REQUESTS: "150", MANAGED_AI_PRICE_IN_PER_MTOK: "0.5", MANAGED_AI_PRICE_OUT_PER_MTOK: "2", MANAGED_AI_STRONG_PRICE_IN_PER_MTOK: "5", MANAGED_AI_STRONG_PRICE_OUT_PER_MTOK: "20", UPLOAD_DIR: path.join(os.tmpdir(), "klierly-e2e-uploads"), ALLOW_PRIVATE_AI_ENDPOINTS: "true" },
+        MANAGED_AI_USER_DAILY_REQUESTS: "150", MANAGED_AI_PRICE_IN_PER_MTOK: "0.5", MANAGED_AI_PRICE_OUT_PER_MTOK: "2", MANAGED_AI_STRONG_PRICE_IN_PER_MTOK: "5", MANAGED_AI_STRONG_PRICE_OUT_PER_MTOK: "20", UPLOAD_DIR: path.join(os.tmpdir(), "klierly-e2e-uploads"), ALLOW_PRIVATE_AI_ENDPOINTS: "true",
+
+        // Small, fast Learn Mode banks for the test run (production defaults are larger).
+        LEARN_TEST_NUMERIC_SOLVERS: "true", AI_BURST_PER_MINUTE: "100000", LEARN_NUMERIC_GENERATORS: "3", LEARN_MCQ_ITEMS: "4", LEARN_SCENARIOS: "6", LEARN_VALIDATION_SEEDS: "50" },
     },
   ],
 });

@@ -57,6 +57,13 @@
       "when": 1795046399047,
       "tag": "0007_mobile_study",
       "breakpoints": true
+    },
+    {
+      "idx": 8,
+      "version": "7",
+      "when": 1795143718316,
+      "tag": "0008_learn_mode",
+      "breakpoints": true
     }
   ]
 }

@@ -10,7 +10,7 @@ import hmac
 import os
 from typing import Any
 
-from fastapi import Depends, FastAPI, Request
+from fastapi import Body, Depends, FastAPI, Request
 from fastapi.exceptions import RequestValidationError
 from fastapi.responses import JSONResponse
 from starlette.exceptions import HTTPException as StarletteHTTPException
@@ -169,6 +169,15 @@ async def numeric_compute(request: Request) -> dict[str, Any]:
     if not isinstance(body, dict):
         raise WorkerError(400, "invalid_request", "Send an object with 'fn' and 'args'.")
     return numeric.compute(body.get("fn"), body.get("args", {}))
+
+
+# Only the isolated test worker enables the experimental Python evaluator.
+if os.environ.get("LEARN_TEST_NUMERIC_SOLVERS") == "true":
+    from . import sandbox
+
+    @app.post("/sandbox/run", dependencies=[Depends(require_token)])
+    def sandbox_run(body: dict[str, Any] = Body(...)) -> dict[str, Any]:
+        return {"results": sandbox.run_solver(body.get("code"), body.get("params"), body.get("fn", "solve"))}
 
 
 @app.post("/numeric/ols", dependencies=[Depends(require_token)])

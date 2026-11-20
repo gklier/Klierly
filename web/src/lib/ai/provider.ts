@@ -108,7 +108,7 @@ export function extractJson(content: string): unknown {
 type ChatResult = { content: string; promptTokens: number | null; completionTokens: number | null };
 
 /** One OpenAI-compatible chat completion. Never logs prompts, outputs or keys. */
-export async function rawChat(cfg: ProviderConfig, messages: { role: "system" | "user"; content: string }[], opts: { json?: boolean; maxTokens?: number; timeoutMs?: number; trusted?: boolean } = {}): Promise<ChatResult> {
+export async function rawChat(cfg: ProviderConfig, messages: { role: "system" | "user"; content: string }[], opts: { json?: boolean; maxTokens?: number; timeoutMs?: number; trusted?: boolean; temperature?: number } = {}): Promise<ChatResult> {
   // `trusted` is only for the operator-configured managed endpoint; user-supplied URLs are always checked.
   const checked = checkBaseUrl(cfg.baseUrl);
   if (!checked.ok) throw new AiError("blocked_endpoint", checked.message);
@@ -116,7 +116,7 @@ export async function rawChat(cfg: ProviderConfig, messages: { role: "system" | 
     method: "POST",
     headers: { "Content-Type": "application/json", Authorization: `Bearer ${cfg.apiKey}` },
     body: JSON.stringify({
-      model: cfg.model, messages, temperature: 0.4, max_tokens: opts.maxTokens ?? 4000,
+      model: cfg.model, messages, temperature: opts.temperature ?? 0.4, max_tokens: opts.maxTokens ?? 4000,
       ...(withFormat ? { response_format: { type: "json_object" } } : {}),
     }),
     redirect: "error",
@@ -152,7 +152,7 @@ const estimateTokens = (text: string) => Math.ceil(text.length / 4);
  * cache, and records requests, tokens and estimated cost (never content).
  * `tier: "strong"` uses the stronger managed model when one is configured.
  */
-export async function chatJson(userId: string, purpose: string, system: string, user: string, opts: { cache?: boolean; maxTokens?: number; tier?: "routine" | "strong" } = {}): Promise<unknown> {
+export async function chatJson(userId: string, purpose: string, system: string, user: string, opts: { cache?: boolean; maxTokens?: number; tier?: "routine" | "strong"; temperature?: number } = {}): Promise<unknown> {
   const status = await aiStatus(userId);
   if (!status.kind) throw new AiError("no_provider", status.reason);
   const m = env.managedAi;
@@ -174,7 +174,7 @@ export async function chatJson(userId: string, purpose: string, system: string, 
   }
   if (!status.available) throw new AiError("limit_reached", status.reason ?? "The AI allowance is used up.");
   // One Generate click over 8 topics makes up to 16 calls (first attempt + one retry each), so the burst limit leaves room for two such clicks a minute. Daily and monthly quotas do the real limiting.
-  const rl = rateLimit(`ai:${userId}`, 40, 60_000);
+  const rl = rateLimit(`ai:${userId}`, Number(process.env.AI_BURST_PER_MINUTE) || 40, 60_000);
   if (!rl.ok) throw new AiError("rate_limited", `Too many AI requests at once. Try again in ${rl.retryAfterSec}s.`);
   // Cap the response size on the managed provider so one request cannot burn the shared budget.
   const maxTokens = status.kind === "managed" ? Math.min(opts.maxTokens ?? 3000, 3000) : opts.maxTokens;
@@ -203,7 +203,7 @@ export async function chatJson(userId: string, purpose: string, system: string, 
     return row.id;
   });
   try {
-    const out = await rawChat(cfg, [{ role: "system", content: system }, { role: "user", content: user }], { json: true, maxTokens, trusted: status.kind === "managed" });
+    const out = await rawChat(cfg, [{ role: "system", content: system }, { role: "user", content: user }], { json: true, maxTokens, trusted: status.kind === "managed", temperature: opts.temperature });
     const parsed = extractJson(out.content);
     const promptTokens = out.promptTokens ?? estimateTokens(system + user), completionTokens = out.completionTokens ?? estimateTokens(out.content);
     const costMicroUsd = price ? Math.round(promptTokens * price.in + completionTokens * price.out) : 0;

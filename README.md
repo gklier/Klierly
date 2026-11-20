@@ -63,6 +63,10 @@ These are real application screenshots using the **synthetic sample course** in 
 
 ![A daily study plan built around an exam date and a 35-minute study budget](docs/images/study-plan.png)
 
+### Guided Learn Mode
+
+Open **Learn** inside a course, choose one or two modules, and build a guide from your imported material. The guide provides lessons, guided questions, and saved progress. New builds use your AI allowance and respect the course AI setting. The hosted preview focuses on conceptual questions. **Practice** remains available for calculations.
+
 ### Practice that stays connected to the course
 
 ![An active practice session from the synthetic statistics question bank](docs/images/practice.png)

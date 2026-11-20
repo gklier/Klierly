@@ -13,7 +13,7 @@ import { summarySchema, supplementSchema, generationSchema, isDuplicate, learnSc
 
 export type TopicResult = { topicId: string; topicName: string; added: number; rejected: string[]; insufficient: string | null; /** Set when generation had to stop here (limit reached, provider error). Earlier topics keep their questions. */ stopped?: string };
 
-async function loadCourse(userId: string, courseId: string) {
+export async function loadAiCourse(userId: string, courseId: string) {
   const [course] = await db.select().from(schema.courses).where(and(eq(schema.courses.id, courseId), eq(schema.courses.userId, userId))).limit(1);
   if (!course) throw new Error("Course not found.");
   if (!course.allowExternalAi) throw new AiError("course_disallows_ai", "This course is set to keep materials away from external AI providers. Change it in the course settings if your course rules allow it.");
@@ -27,7 +27,7 @@ async function loadCourse(userId: string, courseId: string) {
  * with the rejection reasons fed back.
  */
 async function generateQuestionsRun(opts: { userId: string; courseId: string; topicIds: string[]; perTopic: number; maxRounds?: number }): Promise<TopicResult[]> {
-  const course = await loadCourse(opts.userId, opts.courseId);
+  const course = await loadAiCourse(opts.userId, opts.courseId);
   const topics = await db.select().from(schema.topics)
     .where(and(eq(schema.topics.courseId, opts.courseId), eq(schema.topics.userId, opts.userId), inArray(schema.topics.id, opts.topicIds)));
   const fns = await numericFunctions();
@@ -106,7 +106,7 @@ export async function generateQuestions(opts: { userId: string; courseId: string
 
 /** Short source-grounded study note for Learn mode. Cached per topic; regenerate replaces it. */
 export async function generateLearnNote(opts: { userId: string; courseId: string; topicId: string }): Promise<{ ok: true } | { ok: false; reason: string }> {
-  const course = await loadCourse(opts.userId, opts.courseId);
+  const course = await loadAiCourse(opts.userId, opts.courseId);
   const [topic] = await db.select().from(schema.topics)
     .where(and(eq(schema.topics.id, opts.topicId), eq(schema.topics.courseId, opts.courseId), eq(schema.topics.userId, opts.userId))).limit(1);
   if (!topic) throw new Error("Topic not found.");
@@ -136,7 +136,7 @@ const normTopic = (t: string) => t.toLowerCase().replace(/[^a-z0-9]+/g, " ").tri
  * excerpt and be findable in the material, or it is dropped.
  */
 export async function proposeTopics(opts: { userId: string; courseId: string }): Promise<{ ok: true; proposed: number; dropped: number } | { ok: false; reason: string }> {
-  const course = await loadCourse(opts.userId, opts.courseId);
+  const course = await loadAiCourse(opts.userId, opts.courseId);
   const rows = await db.select({
     id: schema.sourceChunks.id, documentId: schema.sourceChunks.documentId, ordinal: schema.sourceChunks.ordinal, kind: schema.sourceChunks.kind, text: schema.sourceChunks.text,
     heading: schema.sourceChunks.heading, page: schema.sourceChunks.page, slide: schema.sourceChunks.slide, tStartMs: schema.sourceChunks.tStartMs, tEndMs: schema.sourceChunks.tEndMs,
@@ -191,7 +191,7 @@ export async function proposeTopics(opts: { userId: string; courseId: string }):
  * write practice questions, and kept free of numeric claims by the prompt (which cannot be verified here).
  */
 export async function generateSupplement(opts: { userId: string; courseId: string; topicId: string }): Promise<{ ok: true } | { ok: false; reason: string }> {
-  const course = await loadCourse(opts.userId, opts.courseId);
+  const course = await loadAiCourse(opts.userId, opts.courseId);
   const [topic] = await db.select().from(schema.topics)
     .where(and(eq(schema.topics.id, opts.topicId), eq(schema.topics.courseId, opts.courseId), eq(schema.topics.userId, opts.userId))).limit(1);
   if (!topic) throw new Error("Topic not found.");
@@ -216,7 +216,7 @@ export async function generateSupplement(opts: { userId: string; courseId: strin
  * not a copy.
  */
 export async function generateSummary(opts: { userId: string; courseId: string; documentId: string }): Promise<{ ok: true } | { ok: false; reason: string }> {
-  const course = await loadCourse(opts.userId, opts.courseId);
+  const course = await loadAiCourse(opts.userId, opts.courseId);
   const [doc] = await db.select().from(schema.sourceDocuments)
     .where(and(eq(schema.sourceDocuments.id, opts.documentId), eq(schema.sourceDocuments.courseId, opts.courseId), eq(schema.sourceDocuments.userId, opts.userId))).limit(1);
   if (!doc) throw new Error("Source not found.");
