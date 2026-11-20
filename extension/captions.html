@@ -1,0 +1,38 @@
+<!doctype html>
+<html lang="en">
+<head><meta charset="utf-8"><title>Klierly — lecture captions</title><link rel="stylesheet" href="ui.css"></head>
+<body>
+<div class="wide">
+  <h1>Lecture captions on this page</h1>
+  <p class="muted">Klierly can import the captions or transcript that a video player on the page makes available, with timestamps, so questions can cite the moment in the lecture. It reads caption text only — never the video or audio.</p>
+  <div id="fatal" class="notice bad" role="alert" hidden></div>
+
+  <section id="step-access" class="card" hidden>
+    <h2 style="margin-top:0">Allow the video site</h2>
+    <p>The player on this page is embedded from another site. To read its captions the extension needs your permission for:</p>
+    <ul id="hosts"></ul>
+    <button id="grant" class="primary" type="button">Allow these video sites</button>
+    <button id="skip" type="button">Skip — only look on the page itself</button>
+  </section>
+
+  <section id="step-read" class="card" hidden>
+    <div class="inline"><button id="read" class="primary" type="button" disabled>Look for captions</button><span id="read-status" class="muted small" role="status"></span></div>
+  </section>
+
+  <section id="step-results" hidden>
+    <h2>Found</h2>
+    <ul id="found" class="module" style="list-style:none;padding:0"></ul>
+    <div class="card">
+      <label for="title">Title in Klierly</label><input id="title" type="text" maxlength="160">
+      <label for="target">Course</label><select id="target"></select>
+      <label for="module">Module</label><select id="module"></select>
+      <label class="check"><input id="permission" type="checkbox"> <span>I am allowed to use these captions for my own study.</span></label>
+      <div id="error" class="notice bad small" role="alert" hidden></div>
+      <div class="row"><button id="import" class="primary" type="button" disabled>Import captions</button><span id="done" class="small" role="status"></span></div>
+    </div>
+  </section>
+  <p class="muted small" style="margin-top:28px">Not affiliated with or endorsed by any LMS, video platform or university.</p>
+</div>
+<script type="module" src="captions.js"></script>
+</body>
+</html>

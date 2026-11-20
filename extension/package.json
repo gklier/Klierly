@@ -1,0 +1,12 @@
+{
+  "name": "klierly-extension",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "Dev-only tooling for the Klierly Capture extension. The shipped extension has no dependencies and no build step.",
+  "scripts": {
+    "test": "node --test tests/unit/*.test.mjs",
+    "icons": "node scripts/make-icons.mjs",
+    "package": "node scripts/package.mjs"
+  }
+}

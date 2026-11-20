@@ -1,0 +1,40 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <title>Klierly Capture — settings</title>
+  <link rel="stylesheet" href="ui.css">
+</head>
+<body>
+<div class="options">
+  <h1 style="font-size:20px">Klierly Capture settings</h1>
+  <p class="muted">Connect the extension to your own Klierly server. It never asks for your LMS login, your Klierly password, or any access token from your university.</p>
+  <form id="form">
+    <fieldset id="settings-fields" disabled>
+      <label for="server">Klierly server address</label>
+      <input id="server" type="url" placeholder="http://localhost:3000" required>
+      <p class="muted small">Use https:// unless Klierly runs on this computer (localhost).</p>
+      <label for="token">Pairing token</label>
+      <input id="token" type="password" autocomplete="off" placeholder="clx_…" required>
+      <p class="muted small">Create it in Klierly under Settings → Browser extension. It can only list your courses and add imports, and you can revoke it there at any time. It is stored only in this browser.</p>
+      <div class="row">
+        <button class="primary" type="submit">Save</button>
+        <button id="test" type="button">Test connection</button>
+        <button id="disconnect" type="button">Disconnect</button>
+      </div>
+    </fieldset>
+  </form>
+  <div id="result" class="notice" role="status" hidden></div>
+  <h2 style="margin-top:24px">What this extension does</h2>
+  <ul class="muted">
+    <li>Works only when you click its toolbar button, and only on the tab you are looking at.</li>
+    <li>Shows you the exact text before anything is sent, and sends it only after you click Import.</li>
+    <li>Leaves out navigation, hidden content, form fields, embedded frames, grades and class lists.</li>
+    <li>Refuses pages that look like a quiz or exam in progress, grades pages and people pages.</li>
+    <li>Does not read cookies, passwords, other tabs or network traffic, and does not run in the background.</li>
+  </ul>
+  <p class="muted small">Not affiliated with or endorsed by any LMS or university. Only capture material you are permitted to use.</p>
+</div>
+<script type="module" src="options.js"></script>
+</body>
+</html>

@@ -1,0 +1,27 @@
+# Public HTTPS through the dedicated Cloudflare Tunnel. Create the tunnel and
+# DNS route first. Keep the account-wide Cloudflare certificate off this VM.
+# Mount only this tunnel's credential and routing files from /etc/klierly-tunnel.
+services:
+  web:
+    ports: !reset []
+    environment:
+      APP_URL: ${APP_URL:?set APP_URL to the final https:// hostname}
+      TRUST_CLOUDFLARE: "true"
+      ALLOW_PRIVATE_AI_ENDPOINTS: "false"
+
+  cloudflared:
+    image: cloudflare/cloudflared:2026.11.1
+    user: "65532:65532"
+    restart: unless-stopped
+    read_only: true
+    mem_limit: 192m
+    cpus: 0.5
+    pids_limit: 64
+    depends_on:
+      web: { condition: service_healthy }
+    command: tunnel --no-autoupdate --config /etc/cloudflared/config.yml run
+    volumes:
+      - /etc/klierly-tunnel:/etc/cloudflared:ro
+    cap_drop: [ALL]
+    security_opt: ["no-new-privileges:true"]
+    networks: [edge]

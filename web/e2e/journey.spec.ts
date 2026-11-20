@@ -1,0 +1,479 @@
+import { enrollTestAccount } from "./passkey-helper";
+import path from "node:path";
+import { expect, test, type Page } from "@playwright/test";
+
+const FIX = path.resolve(__dirname, "../../fixtures");
+const consoleErrors: string[] = [];
+let page: Page;
+let courseUrl = "";
+
+const watch = (p: Page) => {
+  // The browser logs every non-2xx response as a console error. 415 (rejected upload), 404 (other user's
+  // course) and 403 are provoked on purpose by these tests; everything else must stay clean.
+  p.on("console", (m) => { if (m.type() === "error" && !/status of (415|404|403)/.test(m.text())) consoleErrors.push(`${p.url()} :: ${m.text()}`); });
+  p.on("pageerror", (e) => consoleErrors.push(`${p.url()} :: ${e.message}`));
+};
+
+const register = enrollTestAccount;
+
+test.describe.configure({ mode: "serial" });
+test.beforeAll(async ({ browser }) => { page = await (await browser.newContext()).newPage(); watch(page); });
+// A rare React hydration error (#418) on the Materials page of production builds is a known, unresolved issue
+// (docs/KNOWN_ISSUES.md): the page recovers and renders identically. It is reported loudly and capped, not ignored;
+// any other console error still fails the run.
+const HYDRATION = /Minified React error #418|Hydration failed/;
+test.afterAll(async () => {
+  const hydration = consoleErrors.filter((e) => HYDRATION.test(e));
+  if (hydration.length) console.warn(`KNOWN ISSUE (docs/KNOWN_ISSUES.md): ${hydration.length} React hydration error(s) in this run:\n${hydration.join("\n")}`);
+  expect(consoleErrors.filter((e) => !HYDRATION.test(e)), "browser console errors").toEqual([]);
+  expect(hydration.length, "hydration errors in one run (more than 2 means it has got worse)").toBeLessThanOrEqual(2);
+});
+
+test("1. health check passes and the app requires sign-in", async ({ request }) => {
+  const health = await request.get("/api/health");
+  expect(health.status()).toBe(200);
+  expect(await health.json()).toEqual({ status: "ok", database: true, worker: true });
+  await page.goto("/");
+  await expect(page).toHaveURL(/\/login$/);
+  expect((await request.get("/api/courses/00000000-0000-0000-0000-000000000000/status")).status()).toBe(401);
+  await page.goto("/register");
+  await expect(page.getByRole("link", { name: "gabriel.klier@ufl.edu" })).toBeVisible();
+  await expect(page.getByLabel("Password", { exact: true })).toHaveCount(0);
+});
+
+test("2. create an account and a course", async () => {
+  await register(page, "Founder", "founder@e2e.test");
+  await expect(page.getByRole("heading", { name: "Your courses" })).toBeVisible();
+  await page.getByRole("link", { name: "New course" }).first().click();
+  await page.getByLabel("Course name").fill("QMB 3250 – Statistics for Business Decisions");
+  await page.getByLabel(/^Term/).fill("Fall 2026");
+  await page.getByLabel(/^Your goal/).fill("Read regression output without notes");
+  await page.getByRole("button", { name: "Create course" }).click();
+  await page.waitForURL(/\/courses\/[0-9a-f-]+\/materials$/);
+  courseUrl = page.url().replace(/\/materials$/, "");
+  await expect(page.getByText("No sources yet.")).toBeVisible();
+});
+
+test("3. upload valid files; bad and unsupported uploads fail clearly", async () => {
+  await expect(page.getByRole("button", { name: "Choose files" })).toBeDisabled(); // permission declaration first
+  await page.getByRole("tabpanel").getByRole("checkbox").check();
+  await page.locator("#file-input").setInputFiles([
+    path.join(FIX, "qmb-sample/syllabus.md"), path.join(FIX, "qmb-sample/module1-simple-regression.pdf"), path.join(FIX, "qmb-sample/module2-multiple-regression.docx"),
+    path.join(FIX, "qmb-sample/module4-forecasting.md"), path.join(FIX, "bad/not-a-pdf.pdf"), path.join(FIX, "bad/malware.exe"),
+  ]);
+  await expect(page.getByText('Files of type ".exe" are not supported')).toBeVisible();
+  const sources = page.getByRole("region", { name: /^Sources/ });
+  await expect(sources.getByText("Extraction 100%")).toHaveCount(4, { timeout: 30_000 });
+  await expect(sources.getByText("Failed")).toHaveCount(1);
+  await expect(sources.getByText(/named \.pdf but its content is not a PDF/)).toBeVisible();
+  await expect(sources.getByRole("link", { name: "Module 1: Simple Linear Regression" })).toBeVisible();
+  // Same file again is recognised as a duplicate.
+  await page.locator("#file-input").setInputFiles(path.join(FIX, "qmb-sample/syllabus.md"));
+  await expect(page.getByText("Already in this course")).toBeVisible();
+});
+
+test("4. review suggestions drawn from the materials and accept them", async () => {
+  const sugg = page.getByRole("region", { name: /Suggestions from your materials/ });
+  await expect(sugg.getByText("Module 3: Indicator Variables and Interactions")).toBeVisible();
+  await expect(sugg.getByText(/Exam 1 — covers Modules 1–3/)).toBeVisible();
+  await expect(sugg.getByText("Interpret a partial slope while holding the other predictors fixed.", { exact: true })).toBeVisible();
+  await expect(sugg.getByText(/Exam 1 has 25 multiple-choice questions and 2 free-response problems/)).toBeVisible(); // exam structure from the syllabus
+  await expect(sugg.getByText("From the objective: Interpret a partial slope while holding the other predictors fixed.")).toBeVisible(); // objectives become topics
+  await sugg.getByRole("button", { name: "Dismiss Topic: Stepwise selection caveats" }).click();
+  await expect(sugg.getByText("Stepwise selection caveats")).toHaveCount(0);
+  await sugg.getByRole("button", { name: "Accept all" }).click();
+  await expect(sugg).toHaveCount(0);
+  await expect(page.getByRole("heading", { name: "Module 2: Multiple Regression and Model Building", level: 3 })).toBeVisible();
+  await expect(page.getByText(/All \d+ topics are supported by imported text/)).toBeVisible();
+  await expect(page.getByText("No sources assigned to: Module 3: Indicator Variables and Interactions.")).toBeVisible(); // missing material is reported
+});
+
+test("5. paste visible page text with a module; it persists", async () => {
+  await page.getByRole("tab", { name: "Paste text" }).click();
+  await page.getByLabel("Title").fill("Module 3 page: indicator variables");
+  await page.getByLabel("Module", { exact: true }).selectOption({ label: "Module 3: Indicator Variables and Interactions" });
+  await page.getByLabel("Text", { exact: true }).fill("Indicator variables\n\nAn indicator variable takes the value 1 when an observation is in a category and 0 otherwise. A categorical variable with c categories needs c - 1 indicator variables. The category that receives no indicator is the baseline category.");
+  await page.getByLabel(/^Page address/).fill("https://lms.example.edu/courses/1/pages/indicators");
+  await page.getByRole("button", { name: "Add text" }).click();
+  await expect(page.getByText("You must confirm", { exact: false }).or(page.locator("input[name=permission]:invalid"))).toHaveCount(1); // declaration is required
+  await page.locator("input[name=permission]").check();
+  await page.getByRole("button", { name: "Add text" }).click();
+  await expect(page.getByText("was added and is being processed")).toBeVisible();
+  await page.reload();
+  const row = page.getByRole("listitem").filter({ hasText: "Module 3 page: indicator variables" }).first();
+  await expect(row.getByText("Pasted")).toBeVisible();
+  await expect(row.getByText("Extraction 100%")).toBeVisible();
+  await expect(page.getByText("Every module has at least one source.")).toBeVisible();
+  // An active-assessment paste is refused.
+  await page.getByRole("tab", { name: "Paste text" }).click();
+  await page.getByLabel("Title").fill("Quiz 3");
+  await page.getByLabel("Text", { exact: true }).fill("Question 2 of 10. Time Remaining 09:12. Which is the slope? Submit Quiz");
+  await page.locator("input[name=permission]").check();
+  await page.getByRole("button", { name: "Add text" }).click();
+  await expect(page.locator("p[role=alert]")).toContainText("looks like an active assessment");
+});
+
+test("6. search opens the exact excerpt with its page number", async () => {
+  await page.goto(`${courseUrl}/materials`);
+  await page.getByLabel("Search your materials").fill("p-value null hypothesis");
+  await page.getByRole("button", { name: "Search" }).click();
+  await page.getByRole("link", { name: /Module 1: Simple Linear Regression · p\. 2/ }).first().click();
+  await expect(page.getByRole("heading", { name: "Module 1: Simple Linear Regression" })).toBeVisible();
+  const cited = page.locator("li[aria-current=true]");
+  await expect(cited).toContainText("Cited excerpt");
+  await expect(cited).toContainText("p. 2");
+  await expect(cited).toContainText("A p-value is not the probability that the null hypothesis is true");
+  // A reference to an excerpt that does not exist is reported, not invented.
+  await page.goto(page.url().replace(/chunk=[0-9a-f-]+/, "chunk=00000000-0000-0000-0000-000000000000").split("#")[0]);
+  await expect(page.getByText("Nothing is highlighted rather than guessing")).toBeVisible();
+});
+
+test("7. zero configuration: AI is included and no key is asked for; usage is visible", async () => {
+  await page.goto(`${courseUrl}/practice`);
+  await expect(page.getByTestId("ai-usage")).toContainText("Klierly AI is included — no key needed.");
+  await expect(page.getByTestId("ai-usage")).toContainText("0 of 150 free requests used today");
+  await expect(page.getByRole("button", { name: "Start drill" })).toBeDisabled(); // no questions yet
+  await page.goto("/settings");
+  await expect(page.getByTestId("managed-ai")).toContainText("Klierly AI is included");
+  await expect(page.getByTestId("managed-ai")).toContainText("0 of 150");
+  expect(await page.content()).not.toContain("test-key"); // server-side credential never reaches the browser
+});
+
+test("8. generate source-grounded questions and a study note without entering a key", async () => {
+  await page.goto(`${courseUrl}/practice`);
+  const gen = page.getByRole("region", { name: "Generate new questions" });
+  for (const box of await gen.getByRole("checkbox").all()) if (await box.isEnabled()) await box.check();
+  const checked = await gen.getByRole("checkbox", { checked: true }).count();
+  expect(checked).toBeGreaterThanOrEqual(5);
+  await gen.getByLabel("Per topic").selectOption("3");
+  await gen.getByRole("button", { name: "Generate questions" }).click();
+  const result = gen.locator(".notice-good");
+  await expect(result).toBeVisible({ timeout: 90_000 });
+  const added = Number(/Added (\d+) new questions/.exec(await result.innerText())?.[1]);
+  expect(added).toBeGreaterThanOrEqual(10);
+  await expect(result).toContainText("discarded by the checks"); // invalid drafts from the provider were rejected
+  await expect(page.getByText(new RegExp(`${added} questions in this course`))).toBeVisible();
+
+  await page.getByRole("region", { name: "Learn" }).getByRole("link").first().click();
+  await expect(page.getByText("There is no study note for this topic yet.")).toBeVisible();
+  await page.getByRole("button", { name: "Generate a study note with AI" }).click();
+  await expect(page.getByText("AI-generated from your materials")).toBeVisible({ timeout: 30_000 });
+  await expect(page.getByRole("list").getByRole("link", { name: /Module \d/ }).first()).toBeVisible();
+  await expect(page.getByText("uncited claim")).toHaveCount(0);
+
+  // Usage feedback for the student, and cost monitoring for the operator.
+  await page.goto(`${courseUrl}/practice`);
+  const usedText = await page.getByTestId("ai-usage").innerText();
+  const used = Number(/(\d+) of 150 free requests/.exec(usedText)?.[1]);
+  expect(used).toBeGreaterThanOrEqual(6);
+  await page.goto("/admin");
+  await expect(page.getByRole("heading", { name: "Operator: managed AI" })).toBeVisible();
+  await expect(page.getByTestId("month-total")).toContainText(`${used} requests · $0.`);
+  await expect(page.getByRole("cell", { name: "founder@e2e.test" })).toBeVisible();
+  expect(await page.content()).not.toContain("test-key");
+});
+
+test("8b. optional own provider: a bad key fails transparently, a good one connects and takes over, removing it returns to the included AI", async () => {
+  await page.goto("/settings");
+  // UF NaviGator preset: address and example model from UF's quickstart; the key is never prefilled.
+  await page.getByLabel("Type", { exact: true }).selectOption("navigator-experimental");
+  await expect(page.getByLabel("Base URL")).toHaveValue("https://api.ai.it.ufl.edu/v1");
+  await expect(page.getByLabel("Model ID")).toHaveValue("llama-3.1-8b-instruct");
+  await expect(page.getByLabel("API key")).toHaveValue("");
+  await page.getByLabel("Type", { exact: true }).selectOption("google-ai-studio");
+  await expect(page.getByLabel("Base URL")).toHaveValue("https://generativelanguage.googleapis.com/v1beta/openai"); // replaced the NaviGator address
+  await expect(page.getByLabel("Model ID")).toHaveValue(""); // model names change, so the student copies one from AI Studio
+  await expect(page.getByText("On the paid tier it does not use prompts or responses")).toBeVisible();
+  await page.getByLabel("Type", { exact: true }).selectOption("openai-compatible");
+  await expect(page.getByLabel("Base URL")).toHaveValue("");
+  await page.getByLabel("Base URL").fill("http://127.0.0.1:4012/v1");
+  await page.getByLabel("Model ID").fill("mock-1");
+  await page.getByLabel("API key").fill("definitely-wrong-key");
+  await page.getByText("I understand that excerpts").click();
+  await page.getByRole("button", { name: "Save connection" }).click();
+  await expect(page.getByText("Saved. Use “Test connection”")).toBeVisible();
+  await page.getByRole("button", { name: "Test connection" }).click();
+  await expect(page.getByText("The AI provider rejected the API key.")).toBeVisible();
+  await expect(page.getByText("Last test failed")).toBeVisible();
+  await page.getByLabel("API key").fill("test-key");
+  await page.getByText("I understand that excerpts").click();
+  await page.getByRole("button", { name: "Save connection" }).click();
+  await expect(page.getByText("key ending …-key")).toBeVisible();
+  await page.getByRole("button", { name: "Test connection" }).click();
+  await expect(page.getByText("Connected. 127.0.0.1:4012 answered")).toBeVisible();
+  expect(await page.content()).not.toContain("test-key"); // the key is never sent back to the browser
+  await page.goto(`${courseUrl}/practice`);
+  await expect(page.getByTestId("ai-usage")).toContainText("Using your own provider at 127.0.0.1:4012 (mock-1).");
+  await page.goto("/settings");
+  await page.getByRole("button", { name: "Remove provider" }).click();
+  await expect(page.getByText("key ending")).toHaveCount(0); // the saved key is gone
+  await expect(page.getByTestId("managed-ai")).toContainText("Ready");
+  await page.goto(`${courseUrl}/practice`);
+  await expect(page.getByTestId("ai-usage")).toContainText("Klierly AI is included");
+});
+
+test("9. build a study plan that respects date, modules and minutes", async () => {
+  await page.goto(`${courseUrl}/plan`);
+  await expect(page.getByText("Format in your syllabus: 27 questions, 75 minutes, 100 points, multiple choice, free response, problems")).toBeVisible();
+  await page.getByRole("link", { name: "Use this date, scope and format" }).first().click();
+  await expect(page.getByLabel("Exam date")).toHaveValue("2026-12-04");
+  await expect(page.getByText("Filled in from your syllabus.")).toBeVisible();
+  await expect(page.getByLabel("Questions", { exact: true })).toHaveValue("27");
+  await expect(page.getByLabel("Minutes", { exact: true })).toHaveValue("75");
+  await expect(page.getByLabel(/My instructor has announced the format/)).toBeChecked();
+  await expect(page.getByRole("checkbox", { name: /Module 4/ })).not.toBeChecked();
+  await expect(page.getByRole("checkbox", { name: /Module 1/ })).toBeChecked();
+  const d = new Date(Date.now() + 12 * 86400_000);
+  const exam = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
+  await page.getByLabel("Exam date").fill(exam);
+  await page.getByLabel("Minutes per day").fill("35");
+  await page.getByLabel(/^Target grade/).fill("A-");
+  await page.getByRole("button", { name: "Build my study plan" }).click();
+  await expect(page.getByText("35 minutes a day · aiming for A-")).toBeVisible();
+  await expect(page.getByText("The exam format (question types, length, weights) is not confirmed")).toHaveCount(0); // it came from the syllabus
+  await expect(page.getByText("Today · ")).toBeVisible();
+  await expect(page.getByText("Timed mock exam on all covered topics")).toBeVisible();
+  const minutes = (await page.locator("ol > li > div > span.tnum").allInnerTexts()).map((t) => parseInt(t, 10));
+  expect(minutes.length).toBeGreaterThanOrEqual(8);
+  expect(Math.max(...minutes)).toBeLessThanOrEqual(35);
+  await expect(page.getByText(/Time-series|Moving averages|Exponential smoothing/i)).toHaveCount(0); // Module 4 is out of scope
+});
+
+async function answerCurrent(p: Page): Promise<"right" | "unknown"> {
+  const stem = await p.getByTestId("stem").innerText();
+  const m = /y-hat = (\d+) \+ (\d+)x\. Predict y when x = (\d+)/.exec(stem);
+  if (m) { await p.getByTestId("numeric-input").fill(String(Number(m[1]) + Number(m[2]) * Number(m[3]))); return "right"; }
+  if (await p.getByTestId("numeric-input").count()) { await p.getByTestId("numeric-input").fill("1"); return "unknown"; }
+  await p.keyboard.press("a");
+  await expect(p.getByTestId("choice-0")).toHaveAttribute("aria-checked", "true");
+  return "unknown";
+}
+
+test("10. drill: scored feedback with explanations and source references; progress changes", async () => {
+  await page.goto(`${courseUrl}/progress`);
+  await expect(page.getByText("No practice results yet.")).toBeVisible();
+  await page.goto(`${courseUrl}/plan`);
+  await page.getByRole("button", { name: "Start practice" }).first().click();
+  await expect(page.getByTestId("practice-runner")).toBeVisible();
+  const total = Number(/of (\d+)/.exec(await page.getByText(/^Question 1 of \d+/).innerText())![1]);
+  let verifiedRight = 0, citationHref = "";
+  for (let i = 0; i < total; i++) {
+    await expect(page.getByTestId("feedback")).toHaveCount(0); // nothing is revealed before answering
+    const expectation = await answerCurrent(page);
+    await page.keyboard.press("Enter");
+    const fb = page.getByTestId("feedback");
+    await expect(fb).toBeVisible();
+    if (expectation === "right") { await expect(fb).toContainText("Correct"); await expect(page.getByText("Answer verified by calculation")).toBeVisible(); verifiedRight++; }
+    else if (await fb.getByText("Not quite").count()) await page.getByRole("button", { name: "Calculation slip" }).click();
+    await expect(page.getByText("AI-generated", { exact: true })).toBeVisible();
+    const cite = page.getByRole("heading", { name: "From your materials" }).locator("..").getByRole("link").first();
+    await expect(cite).toBeVisible();
+    citationHref = (await cite.getAttribute("href"))!;
+    await page.getByTestId("primary").click();
+  }
+  expect(verifiedRight).toBeGreaterThanOrEqual(1);
+  await expect(page.getByRole("heading", { name: "Drill results" })).toBeVisible();
+  const [right, outOf] = (await page.getByTestId("score").innerText()).split("/").map(Number);
+  expect(outOf).toBe(total);
+  expect(right).toBeGreaterThanOrEqual(verifiedRight);
+
+  // The citation opens the right document at the cited excerpt.
+  await page.goto(citationHref);
+  await expect(page.locator("li[aria-current=true]")).toContainText("Cited excerpt");
+
+  await page.goto(`${courseUrl}/plan`);
+  await expect(page.getByText("Done", { exact: true }).first()).toBeVisible(); // finishing the practice completed the planned session
+  await page.goto(`${courseUrl}/progress`);
+  await expect(page.getByTestId("readiness")).toHaveText(/^\d+%$/);
+  await expect(page.getByText("This is a heuristic, not a grade prediction.")).toBeVisible();
+  await expect(page.getByRole("cell", { name: /^\d+\/\d+$/ }).first()).toBeVisible();
+});
+
+test("10b. exam blueprint: topic weights from the materials, gaps filled, exam built to it, targeted follow-up", async () => {
+  await page.goto(`${courseUrl}/practice`);
+  await page.getByRole("link", { name: "Use the exam blueprint" }).click();
+  await expect(page.getByRole("heading", { name: "Practice exam blueprint" })).toBeVisible();
+  await expect(page.getByText("It is a study aid, not your instructor's exam design.")).toBeVisible();
+  await expect(page.getByText("Length uses the format you confirmed in your study plan (27 questions, 75 minutes).")).toBeVisible();
+  const total = Number(await page.getByTestId("bp-total").innerText());
+  const planned = (await page.locator("tbody tr td:nth-child(3)").allInnerTexts()).map(Number);
+  expect(planned.reduce((a, b) => a + b, 0)).toBe(total);
+  expect(total).toBe(27); // the exam structure stated in the syllabus
+  expect(planned.filter((n) => n >= 1).length).toBe(Math.min(planned.length, total));
+  await expect(page.getByText(/Moving averages|Exponential smoothing/)).toHaveCount(0); // plan scope: Module 4 is not in this exam
+  const missingBefore = Number(await page.getByTestId("bp-missing").innerText());
+  expect(missingBefore).toBeGreaterThan(0);
+  await page.getByRole("button", { name: "Generate the missing questions" }).click();
+  await expect(page.locator(".notice-good", { hasText: "toward the blueprint" })).toBeVisible({ timeout: 90_000 });
+  expect(Number(await page.getByTestId("bp-missing").innerText())).toBeLessThan(missingBefore);
+
+  await page.getByRole("button", { name: "Start the blueprint exam" }).click();
+  await expect(page.getByRole("timer")).toBeVisible();
+  const n = Number(/of (\d+)/.exec(await page.getByText(/^Question 1 of \d+/).innerText())![1]);
+  expect(n).toBeGreaterThanOrEqual(8);
+  for (let i = 0; i < 3; i++) {
+    await answerCurrent(page);
+    await page.getByTestId("primary").click();
+    await expect(page.getByText(new RegExp(`^Question ${i + 2} of`))).toBeVisible(); // wait for the next question before answering it
+  }
+  await page.getByRole("button", { name: "Submit exam" }).click();
+  await page.getByTestId("confirm-submit").click();
+  await expect(page.getByRole("heading", { name: "Mock exam results" })).toBeVisible();
+  await expect(page.getByRole("heading", { name: "What to practise next" })).toBeVisible();
+  // Weaknesses → targeted follow-up: fresh questions on the weak topics, then a drill on exactly those topics.
+  await page.getByRole("button", { name: "Generate fresh questions on these topics" }).click();
+  await expect(page.locator(".notice", { hasText: /Added \d+ new question|discarded by the checks|Not enough source material/ })).toBeVisible({ timeout: 90_000 });
+  await page.getByRole("button", { name: "Drill these topics" }).click();
+  await expect(page.getByTestId("practice-runner")).toBeVisible();
+  await expect(page.getByText("Drill", { exact: true })).toBeVisible();
+  await page.getByRole("link", { name: "Exit" }).click();
+});
+
+test("10c. AI fills the gaps, clearly separated from the course material", async () => {
+  await page.goto(`${courseUrl}/practice`);
+  await page.getByRole("region", { name: "Learn" }).getByRole("link").first().click();
+  await expect(page.getByRole("heading", { name: "What your notes leave out" })).toBeVisible();
+  await page.getByRole("button", { name: "Explain what the notes leave out" }).click();
+  const box = page.getByTestId("supplement");
+  await expect(box).toBeVisible({ timeout: 30_000 });
+  await expect(box).toContainText("AI-added · general knowledge · not from your course");
+  await expect(box).toContainText("Not checked against your course or any textbook, and it can be wrong.");
+  await expect(box).toContainText("Worth checking with your instructor or textbook");
+  await expect(box.getByRole("link")).toHaveCount(0); // it is never cited as if it were a source
+});
+
+test("10d. the activity log shows what happened, and the diagnostics file holds counts, not content", async () => {
+  await page.goto("/activity");
+  const list = page.getByTestId("activity-list");
+  for (const label of ["Imported a source", "Source processed", "Source could not be processed", "Accepted suggestions", "AI request", "Generated questions", "Saved study plan", "Finished practice", "Saved AI provider"]) await expect(list.getByText(label).first(), label).toBeVisible();
+  await page.getByRole("link", { name: "Imports" }).click();
+  await expect(page.getByTestId("activity-list").getByText("AI request")).toHaveCount(0);
+  await page.goto("/activity");
+  const res = await page.request.get("/api/activity/export");
+  expect(res.status()).toBe(200);
+  expect(res.headers()["content-disposition"]).toContain("klierly-diagnostics-");
+  const text = await res.text();
+  const body = JSON.parse(text);
+  expect(body.format).toBe("klierly-diagnostics/1");
+  expect(body.environment).toMatchObject({ managedAiConfigured: true, workerReachable: true });
+  expect(body.courses[0]).toMatchObject({ name: "QMB 3250 – Statistics for Business Decisions" });
+  expect(body.courses[0].docs.ready).toBeGreaterThanOrEqual(3);
+  expect(body.courses[0].chunks).toBeGreaterThan(10);
+  expect(body.events.length).toBeGreaterThan(30);
+  const failed = body.events.find((e: { event: string }) => e.event === "source.failed");
+  expect(failed.details).toMatchObject({ code: "type_mismatch", willRetry: false });
+  // Counts and labels, never what the documents say, what was typed, an email address or a key.
+  for (const never of ["founder@e2e.test", "e2e-password-12345", "test-key", "definitely-wrong-key", "An indicator variable takes the value 1", "A p-value is not the probability", "Question 2 of 10"]) expect(text.includes(never), never).toBe(false);
+  expect((await (await page.context().request.get("/api/activity/export", { headers: { cookie: "" } })).status())).toBe(401);
+});
+
+test("11. timed mock exam grades only after submission", async () => {
+  await page.goto(`${courseUrl}/practice`);
+  const exam = page.getByRole("region", { name: "Timed mock exam" });
+  await exam.getByLabel("Questions").fill("4");
+  await exam.getByLabel("Minutes").fill("5");
+  await exam.getByRole("button", { name: "Start exam" }).click();
+  await expect(page.getByRole("timer")).toContainText(/[45]:\d\d/);
+  await answerCurrent(page);
+  await page.getByTestId("primary").click(); // Next
+  await expect(page.getByText("Question 2 of 4")).toBeVisible();
+  await expect(page.getByTestId("feedback")).toHaveCount(0);
+  await expect(page.getByText(/Correct answer|Not quite/)).toHaveCount(0);
+  await expect(page.getByRole("button", { name: /hint/i })).toHaveCount(0);
+  await page.getByRole("button", { name: "Question 1, answered" }).click(); // navigator
+  await page.reload(); // answers persist across a reload
+  await expect(page.getByRole("button", { name: "Question 1, answered" })).toBeVisible();
+  await page.getByRole("button", { name: "Submit exam" }).click();
+  await expect(page.getByText("3 questions are unanswered and will be marked incorrect.")).toBeVisible();
+  await page.getByTestId("confirm-submit").click();
+  await expect(page.getByRole("heading", { name: "Mock exam results" })).toBeVisible();
+  await expect(page.getByTestId("score")).toHaveText(/^[01]\/4$/);
+  await expect(page.getByText("No answer")).toHaveCount(3);
+  await expect(page.getByText("Average per question")).toBeVisible();
+  // Missed questions are queued for review.
+  await page.getByRole("button", { name: "Retry the questions I missed" }).click();
+  await expect(page.getByTestId("practice-runner")).toBeVisible();
+  await expect(page.getByText("Review mistakes", { exact: true })).toBeVisible();
+  await page.getByRole("link", { name: "Exit" }).click();
+  await expect(page.getByText("In progress").first()).toBeVisible();
+});
+
+test("12. report a bad question; calculator works", async () => {
+  await page.getByRole("link", { name: "Continue" }).first().click();
+  await page.getByRole("button", { name: "Calculator" }).click();
+  await page.getByLabel("Expression").fill("39.863 + 2.479*20 - 2.998*10");
+  await page.getByRole("button", { name: "Calculate" }).click();
+  await expect(page.getByText("59.463").first()).toBeVisible();
+  await answerCurrent(page);
+  await page.getByTestId("primary").click();
+  await page.getByRole("button", { name: "Report a bad question" }).click();
+  await page.getByLabel("What is wrong with it?").fill("Ambiguous wording");
+  await page.getByRole("button", { name: "Send report" }).click();
+  await expect(page.getByText("Reported. This question will not be shown again.")).toBeVisible();
+  await page.getByRole("link", { name: "Exit" }).click();
+  await expect(page.getByText("1 reported question is excluded from practice.")).toBeVisible();
+});
+
+test("13. another user cannot see this course; the sample course works without an AI key", async ({ browser }) => {
+  const other = await (await browser.newContext()).newPage();
+  watch(other);
+  await register(other, "Other Student", "other@e2e.test");
+  for (const p of ["", "/materials", "/practice", "/plan", "/progress"]) expect((await other.goto(courseUrl + p))!.status()).toBe(404);
+  const docHref = await page.goto(`${courseUrl}/materials`).then(() => page.getByRole("link", { name: "Module 1: Simple Linear Regression" }).first().getAttribute("href"));
+  expect((await other.goto(docHref!))!.status()).toBe(404);
+  const docId = docHref!.split("/").pop()!;
+  expect((await other.request.get(`/api/documents/${docId}/file`)).status()).toBe(404);
+  expect((await page.request.get(`/api/documents/${docId}/file`)).headers()["content-disposition"]).toContain("attachment");
+  const cross = await other.request.post(`${courseUrl.replace(/^.*\/courses/, "/api/courses")}/upload`, { headers: { origin: "http://localhost:3100" }, multipart: { permission: "yes", file: { name: "a.txt", mimeType: "text/plain", buffer: Buffer.from("some text to import here") } } });
+  expect(cross.status()).toBe(404);
+  const csrf = await page.request.post(`${courseUrl.replace(/^.*\/courses/, "/api/courses")}/upload`, { headers: { origin: "https://evil.example" }, multipart: { permission: "yes", file: { name: "a.txt", mimeType: "text/plain", buffer: Buffer.from("some text to import here") } } });
+  expect(csrf.status()).toBe(403);
+
+  await other.goto("/");
+  await other.getByRole("button", { name: "Load the sample course" }).click();
+  await other.waitForURL(/\/courses\/[0-9a-f-]+$/, { timeout: 90_000 });
+  await expect(other.getByText("Synthetic sample").first()).toBeVisible();
+  await other.getByRole("link", { name: "Practice", exact: true }).click();
+  await expect(other.getByText("35 questions in this course")).toBeVisible();
+  await expect(other.getByTestId("ai-usage")).toContainText("Klierly AI is included");
+  expect((await other.goto("/admin"))!.status()).toBe(404); // operator page is not visible to students
+  await other.goBack();
+  await other.getByRole("button", { name: "Start drill" }).click();
+  await expect(other.getByTestId("stem")).toBeVisible();
+  await other.close();
+});
+
+test("14. responsive layout and dark mode render", async () => {
+  await page.setViewportSize({ width: 390, height: 800 });
+  await page.goto(`${courseUrl}/practice`);
+  expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true);
+  await page.goto(`${courseUrl}/materials`);
+  expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true);
+  await page.setViewportSize({ width: 1280, height: 900 });
+  await page.getByRole("button", { name: "Switch to dark mode" }).click();
+  await expect(page.locator("html")).toHaveAttribute("data-theme", "dark");
+  await page.reload();
+  await expect(page.locator("html")).toHaveAttribute("data-theme", "dark"); // persists without a flash
+  await page.getByRole("button", { name: "Switch to light mode" }).click();
+});
+
+test("15. delete a source, the course and the account", async () => {
+  await page.goto(`${courseUrl}/materials`);
+  await page.getByRole("button", { name: "Delete Module 4: Time-Series Forecasting" }).click();
+  await page.getByRole("dialog").getByRole("button", { name: "Delete source" }).click();
+  await expect(page.getByRole("link", { name: "Module 4: Time-Series Forecasting" })).toHaveCount(0);
+  await page.goto(`${courseUrl}/settings`);
+  await page.getByRole("button", { name: "Delete course" }).click();
+  await page.getByRole("dialog").getByRole("button", { name: "Delete course" }).click();
+  await page.waitForURL("/");
+  await expect(page.getByText("Start with your own course")).toBeVisible();
+  expect((await page.goto(courseUrl))!.status()).toBe(404);
+  await page.goto("/settings");
+  await page.getByLabel("Type DELETE to confirm").fill("wrong-password");
+  await page.getByRole("button", { name: "Delete my account and all data" }).click();
+  await expect(page.getByText("Type DELETE to confirm.")).toBeVisible();
+  await page.getByLabel("Type DELETE to confirm").fill("DELETE");
+  await page.getByRole("button", { name: "Delete my account and all data" }).click();
+  await page.waitForURL(/\/login$/);
+  await expect(page.getByRole("button", { name: "Sign in with a passkey" })).toBeVisible();
+});
