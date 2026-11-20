@@ -137,11 +137,15 @@ async function enterConcept(userId: string, p: Progress, c: Concept, states: Map
 
 export type Phase = LmCursor["phase"];
 
+/** What the student is looking at. Forms send it back; an action built on an older screen (a double-click, a second tab) is ignored. */
+export const screenToken = (c: LmCursor | null) => c ? `${c.conceptId}|${c.phase}|${c.i}|${c.round}|${c.qs?.key ?? ""}|${c.qs?.answered ? 1 : 0}|${c.qs?.tries ?? 0}|${c.qs?.hints ?? 0}` : "";
+
 /** Move to the next phase. "worked" is skipped when the concept has no numeric example. */
-export async function advance(userId: string, courseId: string) {
+export async function advance(userId: string, courseId: string, token?: string) {
   const concepts = await readyConcepts(userId, courseId);
   const p = await loadProgress(userId, courseId);
   const cur = p.cursor; if (!cur) throw new LearnError("no_cursor", "Start studying first.");
+  if (token !== undefined && token !== screenToken(cur)) return; // a stale screen (double-click): do nothing
   const c = concepts.find((x) => x.id === cur.conceptId); if (!c) throw new LearnError("gone", "That concept is no longer available.");
   const states = await stateMap(userId, concepts);
   const hasWorked = Boolean(await firstNumericKey(c.id, userId));
@@ -171,19 +175,21 @@ export async function advance(userId: string, courseId: string) {
 }
 
 /** Show a hint. Level 1 recaps the idea, 2 shows the first step, 3 everything but the final answer. The answer is never given. */
-export async function hint(userId: string, courseId: string) {
+export async function hint(userId: string, courseId: string, token?: string) {
   const p = await loadProgress(userId, courseId);
   const cur = p.cursor; if (!cur?.qs || cur.qs.answered) return;
+  if (token !== undefined && token !== screenToken(cur)) return;
   cur.qs.hints = nextHintLevel(cur.qs.hints);
   await saveProgress(p);
 }
 
 export type AnswerOutcome = { ok: boolean; bad?: boolean };
 
-export async function answer(userId: string, courseId: string, resp: string): Promise<AnswerOutcome> {
+export async function answer(userId: string, courseId: string, resp: string, token?: string): Promise<AnswerOutcome> {
   const concepts = await readyConcepts(userId, courseId);
   const p = await loadProgress(userId, courseId);
   const cur = p.cursor; if (!cur?.qs || cur.qs.answered) throw new LearnError("no_question", "There is no open question.");
+  if (token !== undefined && token !== screenToken(cur)) throw new LearnError("stale", "That question has moved on. Your answer was not counted; look at the question on screen.");
   const c = concepts.find((x) => x.id === cur.conceptId)!;
   const it = await itemOf(cur.qs.key, userId); if (!it) throw new LearnError("gone", "That question is no longer available.");
   const q = it.body, qs = cur.qs;
@@ -233,6 +239,7 @@ export async function reportItem(userId: string, courseId: string, key: string, 
 // ------------------------------------------------------------------ the view the page renders
 
 export type StudyView = {
+  token: string;
   concept: { id: string; title: string; why: string; short: string; alt: string; cards: Concept["cards"]; formulas: Concept["formulas"]; index: number; total: number; minutes: number };
   phase: Phase; i: number; round: number;
   worked: { steps: string[]; stem: string } | null;
@@ -279,6 +286,7 @@ export async function studyView(userId: string, courseId: string): Promise<Study
     }
   }
   return {
+    token: screenToken(cur),
     concept: { id: c.id, title: c.title, why: c.why, short: c.short, alt: c.altExplanation, cards: c.cards, formulas: c.formulas, index: idx, total: concepts.length, minutes: c.minutes },
     phase: cur.phase, i: cur.i, round: cur.round, worked, question, mastery: mastery(st), status: st.status,
     checkpoint: { recent: st.log.slice(st.baseIndex).slice(-5), needed: 4 },

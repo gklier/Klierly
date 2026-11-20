@@ -15,7 +15,7 @@ export default async function StudyPage({ params }: { params: Promise<{ courseId
   const course = await getCourse(user.id, (await params).courseId);
   const v = await studyView(user.id, course.id);
   if (!v) redirect(`/courses/${course.id}/learn`);
-  const hidden = <input type="hidden" name="courseId" value={course.id} />;
+  const hidden = <><input type="hidden" name="courseId" value={course.id} /><input type="hidden" name="token" value={v.token} /></>;
   const Next = ({ label = "Next", primary = true }: { label?: string; primary?: boolean }) => (
     <ActionForm action={advanceAction}>{hidden}<Submit className={primary ? "btn btn-primary btn-lg" : "btn btn-lg"} pendingText="…">{label}</Submit></ActionForm>
   );

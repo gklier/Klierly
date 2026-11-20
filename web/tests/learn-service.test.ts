@@ -6,7 +6,7 @@ import { and, eq } from "drizzle-orm";
 import { db, getPool, schema } from "@/db";
 import { deleteAccount } from "@/lib/courses";
 import { createSource } from "@/lib/ingest/pipeline";
-import { advance, answer, conceptList, guideStatus, hint, LearnError, pickItem, reportItem, startBuild, startStudying, studyView } from "@/lib/learn/service";
+import { advance, answer, conceptList, screenToken, guideStatus, hint, LearnError, pickItem, reportItem, startBuild, startStudying, studyView } from "@/lib/learn/service";
 import { resetRateLimits } from "@/lib/ratelimit";
 import { MOCK_KEY, startMockLlm } from "../scripts/mock-llm";
 import { FIXTURES, makeCourse, makeUser, prepareDb, waitForDocument } from "./helpers";
@@ -173,6 +173,30 @@ describe("the guided path", () => {
     expect((await conceptList(u.id, courseId))[startIdx].status).not.toBe("new");
     expect(cl.length).toBe(6);
   }, 120_000);
+});
+
+describe("stale screens", () => {
+  it("an action built on an older screen is ignored or refused, never applied to the question now showing", async () => {
+    let v = (await studyView(u.id, courseId))!;
+    for (let n = 0; n < 40 && !(v.question && !v.question.answered); n++) { await advance(u.id, courseId); v = (await studyView(u.id, courseId))!; }
+    const old = v.token;
+    expect(old).toBeTruthy();
+    await answer(u.id, courseId, await solve(v.question!.key, true), old);
+    const after = (await studyView(u.id, courseId))!;
+    expect(after.token).not.toBe(old);
+    await advance(u.id, courseId, old); // the double-click on a stale Next: nothing happens
+    expect((await studyView(u.id, courseId))!.token).toBe(after.token);
+    await advance(u.id, courseId, after.token);
+    const moved = (await studyView(u.id, courseId))!;
+    expect(moved.token).not.toBe(after.token);
+    if (moved.question && !moved.question.answered) {
+      await expect(answer(u.id, courseId, "1", old)).rejects.toMatchObject({ code: "stale" });
+      expect((await studyView(u.id, courseId))!.question!.tries).toBe(0); // the stale answer did not count
+      await hint(u.id, courseId, old);
+      expect((await studyView(u.id, courseId))!.question!.hints).toBe(0);
+    }
+    expect(screenToken(null)).toBe("");
+  }, 60_000);
 });
 
 describe("question supply, dedupe and reports", () => {

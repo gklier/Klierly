@@ -34,7 +34,7 @@ export async function startStudyingAction(_: ActionState, fd: FormData): Promise
 
 export async function advanceAction(_: ActionState, fd: FormData): Promise<ActionState> {
   const g = await own(fd); if (!g) return { error: "That course was not found." };
-  try { await advance(g.user.id, g.courseId); } catch (e) { return message(e); }
+  try { await advance(g.user.id, g.courseId, s(fd, "token", 300)); } catch (e) { return message(e); }
   revalidatePath(`/courses/${g.courseId}/learn/study`);
   return null;
 }
@@ -43,7 +43,7 @@ export async function answerAction(_: ActionState, fd: FormData): Promise<Action
   const g = await own(fd); if (!g) return { error: "That course was not found." };
   if (!rateLimit(`learn-answer:${g.user.id}`, 240, 60_000).ok) return { error: "Slow down a little and try again." };
   try {
-    const r = await answer(g.user.id, g.courseId, s(fd, "resp", 40));
+    const r = await answer(g.user.id, g.courseId, s(fd, "resp", 40), s(fd, "token", 300));
     if (r.bad) return { error: "Enter a number (decimals are fine)." };
   } catch (e) { return message(e); }
   revalidatePath(`/courses/${g.courseId}/learn/study`);
@@ -52,7 +52,7 @@ export async function answerAction(_: ActionState, fd: FormData): Promise<Action
 
 export async function hintAction(_: ActionState, fd: FormData): Promise<ActionState> {
   const g = await own(fd); if (!g) return { error: "That course was not found." };
-  await hint(g.user.id, g.courseId);
+  await hint(g.user.id, g.courseId, s(fd, "token", 300));
   revalidatePath(`/courses/${g.courseId}/learn/study`);
   return null;
 }

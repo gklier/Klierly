@@ -6,6 +6,7 @@
 - **Numbers come from code.** AI-written solvers run in a worker sandbox; every numeric generator is validated over 50+ seeds against an independent solver; bad generators are rejected (tests cover: disagreeing solver, trap equal to answer, undefined placeholder, repeated stems, absurd values, missing independent solver, sandbox-refused code).
 - **Guided flow** in the browser: lesson cards → worked example one step at a time → three guided rounds with fading scaffolding → practice → "practiced"; mastery needs ≥4 unaided of the last 5; revisit every 3rd question; misses re-queue after ≥3; hint ladder never reveals the answer; trap-specific feedback for numeric misses; every option explained for multiple choice; reload and "come back later" resume the same question and hint level; one-tap "Report a problem" retires the question without interrupting.
 - **Dedupe:** 400 consecutive picks for one concept: 0 repeated stems, no AI call (asserted).
+- **Stale screens:** every action carries a token for the screen it was made on; a double-click on Next, a second tab or a late submit is ignored or refused instead of being applied to whichever question is current (asserted).
 - **Isolation:** another account sees nothing and cannot answer or advance (asserted); the guide page redirects an unauthenticated browser to sign-in.
 - **No vetting UI:** the E2E asserts no generate/approve/accept/edit buttons on the study screens.
 
@@ -13,7 +14,7 @@
 | Suite | Result |
 |---|---|
 | Worker (pytest) | 43 passed (17 new: sandbox escapes, runaway loops, memory bombs, NaN, limits, scipy agreement) |
-| Web integration and unit (vitest, real Postgres + worker, mock AI) | 137 passed (36 new: engine 10, pipeline 16, study service 10) |
+| Web integration and unit (vitest, real Postgres + worker, mock AI) | 138 passed (37 new: engine 10, pipeline 16, study service 11) |
 | Browser (Playwright, production build) | 53 passed (9 new Learn Mode tests with screenshots in `docs/learn-mode/screenshots/`), zero console errors |
 | Extension | 17 passed |
 | Types, lint, `npm audit` | clean |

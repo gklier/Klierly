@@ -13,22 +13,32 @@ let page: Page, courseId = "";
 
 const sql = async <T extends object>(text: string, values: unknown[] = []): Promise<T[]> => { const c = new Client({ connectionString: DB }); await c.connect(); try { return (await c.query(text, values)).rows as T[]; } finally { await c.end(); } };
 type Cur = { key: string; item: { kind: "num" | "mcq"; answer: number | null; correctIndex: number | null; traps: { value: number; message: string }[] }; stem: string };
+type St = { phase: string; i: number; round: number; answered: boolean; key: string | null; concept: string; tries: number; hints: number };
+const state = async (): Promise<St> => {
+  const [r] = await sql<{ c: { phase: string; i: number; round: number; conceptId: string; qs: { key: string; answered: boolean; tries: number; hints: number } | null } }>(`select p.cursor c from lm_progress p join users u on u.id = p.user_id where u.email = $1 and p.course_id = $2`, [EMAIL, courseId]);
+  return { phase: r.c.phase, i: r.c.i, round: r.c.round, answered: Boolean(r.c.qs?.answered), key: r.c.qs?.key ?? null, concept: r.c.conceptId, tries: r.c.qs?.tries ?? 0, hints: r.c.qs?.hints ?? 0 };
+};
+const sameSt = (a: St, b: St) => JSON.stringify(a) === JSON.stringify(b);
+/** Wait until the server has really applied the last action (the cursor changed), not just until the network went quiet. */
+const applied = async (before: St) => { await expect.poll(async () => sameSt(await state(), before), { timeout: 15_000 }).toBe(false); await page.waitForLoadState("networkidle"); };
 async function current(): Promise<Cur> {
   const [r] = await sql<{ key: string; body: Cur["item"] & { stemHtml: string } }>(`select i.key, i.body from lm_progress p join users u on u.id = p.user_id join lm_items i on i.key = p.cursor->'qs'->>'key' where u.email = $1 and p.course_id = $2`, [EMAIL, courseId]);
   return { key: r.key, item: r.body, stem: r.body.stemHtml };
 }
 const solveUI = async (right: boolean) => {
+  const before = await state();
   const c = await current();
   if (c.item.kind === "mcq") { const idx = right ? c.item.correctIndex! : (c.item.correctIndex! + 1) % 4; await page.locator('button[name="resp"]').nth(idx).click(); }
   else { await page.getByLabel("Your answer").fill(String(right ? c.item.answer : c.item.answer! + 777.5)); await page.getByRole("button", { name: "Check" }).click(); }
   // React clears the form once the action finishes; fill again only after that, or the new text is wiped. (Gone entirely = answered.)
   if (c.item.kind === "num") await page.getByLabel("Your answer").waitFor({ state: "detached", timeout: 3000 }).catch(() => expect(page.getByLabel("Your answer")).toHaveValue("", { timeout: 5000 }));
-  await page.waitForLoadState("networkidle"); // the answer is a server action: wait for it before reading or clicking again
+  await applied(before); // the answer is a server action: wait until the server has recorded it
   return c;
 };
 const next = async () => {
+  const before = await state();
   await page.getByRole("button", { name: /^(Next|Got it, next|Next step|Next concept)$/ }).click();
-  await page.waitForLoadState("networkidle");
+  await applied(before);
 };
 const text = (s: string) => `${s}\n\n` + Array.from({ length: 7 }, (_, i) => `${s} point ${i + 1}: the mean is the sum divided by the count, and a moving average uses only the most recent k values. Standard deviation measures spread around the mean in the original units. ` + "Careful reading of the course notes matters for every calculation. ".repeat(4)).join("\n\n");
 
@@ -146,7 +156,9 @@ test("a wrong numeric answer names the exact mistake; a hint never gives the ans
   for (let n = 0; n < 20; n++) {
     const c = await current();
     if (c.item.kind === "num" && c.item.traps.length) {
+      const b4 = await state();
       await page.getByRole("button", { name: "Give me a hint" }).click();
+      await applied(b4);
       await expect(page.getByTestId("hints")).toBeVisible();
       expect(await page.getByTestId("hints").innerText()).not.toContain(String(c.item.answer));
       await page.getByLabel("Your answer").fill(String(c.item.traps[0].value));
@@ -185,26 +197,18 @@ test("reload mid-question: same question, same hint level", async () => {
   await expect(page.getByTestId("hints").locator("li")).toHaveCount(2);
 });
 
-type St = { phase: string; i: number; round: number; answered: boolean; key: string | null; concept: string };
-const state = async (): Promise<St> => {
-  const [r] = await sql<{ c: { phase: string; i: number; round: number; conceptId: string; qs: { key: string; answered: boolean } | null } }>(`select p.cursor c from lm_progress p join users u on u.id = p.user_id where u.email = $1 and p.course_id = $2`, [EMAIL, courseId]);
-  return { phase: r.c.phase, i: r.c.i, round: r.c.round, answered: Boolean(r.c.qs?.answered), key: r.c.qs?.key ?? null, concept: r.c.conceptId };
-};
-const sameSt = (a: St, b: St) => JSON.stringify(a) === JSON.stringify(b);
 
 test("finish the concept with clean answers, then auto-advance to the next concept", async () => {
   const first = await page.getByTestId("concept-title").innerText();
   for (let n = 0; n < 60; n++) {
     const st = await state();
     if (st.phase === "done") break;
-    const before = st;
     if ((st.phase === "guided" || st.phase === "practice") && !st.answered) {
       await expect(page.getByRole("button", { name: /^Check$|./ }).first()).toBeVisible();
       await solveUI(true);
     } else {
       await next();
     }
-    await expect.poll(async () => sameSt(await state(), before), { timeout: 15_000 }).toBe(false);
   }
   await expect(page.getByTestId("concept-done")).toBeVisible();
   await page.screenshot({ path: path.join(SHOTS, "07-concept-practiced.png") });
