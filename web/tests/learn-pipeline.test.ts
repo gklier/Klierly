@@ -27,6 +27,7 @@ const upload = async (moduleId: string, file: string) => {
 };
 const newBuild = async (moduleIds: string[]) => (await db.insert(schema.lmBuilds).values({ userId: user.id, courseId, moduleIds }).returning())[0];
 const freshCalls = async () => (await db.execute<{ n: number }>(sql`select count(*)::int as n from ai_usage where user_id = ${user.id} and cached = false`)).rows[0].n;
+const freshPurposes = async () => (await db.execute<{ purpose: string }>(sql`select purpose from ai_usage where user_id = ${user.id} and cached = false order by created_at, id`)).rows.map((r) => r.purpose);
 
 beforeAll(async () => {
   await prepareDb(); llm = await startMockLlm(PORT); resetRateLimits();
@@ -129,10 +130,16 @@ describe("the build pipeline (mock AI, real worker sandbox, real Postgres)", () 
   });
 
   it("re-running with unchanged input makes zero new AI calls and adds no rows", async () => {
+    const purposesBefore = await freshPurposes();
     const before = { calls: await freshCalls(), items: (await db.select().from(schema.lmItems).where(eq(schema.lmItems.courseId, courseId))).length, gens: (await db.select().from(schema.lmGenerators).where(eq(schema.lmGenerators.courseId, courseId))).length };
+    // A no-op update moves a row inside its table, so any query that relied on an unspecified row order would now see a different order
+    // and build a different prompt (a cache miss). Do it to every table the pipeline reads, in reverse order, then re-run.
+    for (const t of ["source_chunks", "source_documents", "modules", "lm_concepts"]) await db.execute(sql.raw(`update ${t} set id = id where ${t === "lm_concepts" || t === "source_documents" || t === "source_chunks" ? "course_id" : "course_id"} = '${courseId}'`));
     const again = await newBuild([m1, m2]);
     await runBuild(again.id);
     expect((await db.select().from(schema.lmBuilds).where(eq(schema.lmBuilds.id, again.id)))[0].status).toBe("ready");
+    const purposesAfter = await freshPurposes();
+    expect(purposesAfter.slice(purposesBefore.length), "stages that made a new AI call on the unchanged re-run").toEqual([]);
     expect(await freshCalls()).toBe(before.calls);
     expect((await db.select().from(schema.lmItems).where(eq(schema.lmItems.courseId, courseId))).length).toBe(before.items);
     expect((await db.select().from(schema.lmGenerators).where(eq(schema.lmGenerators.courseId, courseId))).length).toBe(before.gens);

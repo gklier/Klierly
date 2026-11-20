@@ -91,10 +91,11 @@ export async function suggestModules(userId: string, courseId: string): Promise<
 // ------------------------------------------------------------------ stages
 
 async function stageAnalyze(build: typeof schema.lmBuilds.$inferSelect) {
-  const mods = await db.select().from(schema.modules).where(inArray(schema.modules.id, build.moduleIds));
-  const docs = await db.select({ title: schema.sourceDocuments.title, moduleId: schema.sourceDocuments.moduleId }).from(schema.sourceDocuments).where(and(eq(schema.sourceDocuments.courseId, build.courseId), eq(schema.sourceDocuments.status, "ready")));
+  const mods = (await db.select().from(schema.modules).where(inArray(schema.modules.id, build.moduleIds))).sort((a, b) => a.position - b.position || a.id.localeCompare(b.id));
+  const docs = await db.select({ title: schema.sourceDocuments.title, moduleId: schema.sourceDocuments.moduleId }).from(schema.sourceDocuments).where(and(eq(schema.sourceDocuments.courseId, build.courseId), eq(schema.sourceDocuments.status, "ready"))).orderBy(asc(schema.sourceDocuments.title), asc(schema.sourceDocuments.id));
   const exam = await searchChunks({ userId: build.userId, courseId: build.courseId, query: "exam covers format points minutes allowed formula", limit: 10 });
-  const cm = toPrompt(exam.map((c) => ({ id: c.id, title: c.documentTitle, text: c.text })));
+  // Search ties can come back in any order; sort so identical input always builds the identical prompt (and hits the cache).
+  const cm = toPrompt(exam.map((c) => ({ id: c.id, title: c.documentTitle, text: c.text })).sort((a, b) => a.title.localeCompare(b.title) || a.id.localeCompare(b.id)));
   const user = `Modules selected by the student:\n${mods.map((m) => `- id=${m.id} title=${m.name}`).join("\n")}\n\nSource titles in the course:\n${docs.map((d) => `- ${d.title}`).join("\n").slice(0, 3000)}\n\nExam-information excerpts:\n${courseMaterial(cm.chunks)}`;
   const { data } = await callJson(build.userId, "A_analyze_course", user, analysisSchema, { maxTokens: 2800 });
   // Keep only evidence that points at chunks we actually sent: nothing cited that was not provided.
@@ -143,10 +144,11 @@ export async function stageConcepts(build: typeof schema.lmBuilds.$inferSelect, 
 }
 
 const conceptChunks = async (userId: string, courseId: string, c: typeof schema.lmConcepts.$inferSelect, n = 8) => {
-  const direct = c.sourceRefs.length ? await db.select({ id: schema.sourceChunks.id, title: schema.sourceDocuments.title, text: schema.sourceChunks.text }).from(schema.sourceChunks).innerJoin(schema.sourceDocuments, eq(schema.sourceDocuments.id, schema.sourceChunks.documentId)).where(and(inArray(schema.sourceChunks.id, c.sourceRefs), eq(schema.sourceDocuments.userId, userId))) : [];
+  const byId = (a: { id: string }, b: { id: string }) => a.id.localeCompare(b.id); // fixed order: identical input must build the identical prompt
+  const direct = (c.sourceRefs.length ? await db.select({ id: schema.sourceChunks.id, title: schema.sourceDocuments.title, text: schema.sourceChunks.text }).from(schema.sourceChunks).innerJoin(schema.sourceDocuments, eq(schema.sourceDocuments.id, schema.sourceChunks.documentId)).where(and(inArray(schema.sourceChunks.id, c.sourceRefs), eq(schema.sourceDocuments.userId, userId))) : []).sort(byId);
   if (direct.length >= 3) return toPrompt(direct.slice(0, n));
-  const found = await searchChunks({ userId, courseId, query: c.title, moduleIds: c.moduleId ? [c.moduleId] : undefined, limit: n });
-  return toPrompt([...direct, ...found.map((f) => ({ id: f.id, title: f.documentTitle, text: f.text }))].slice(0, n));
+  const found = (await searchChunks({ userId, courseId, query: c.title, moduleIds: c.moduleId ? [c.moduleId] : undefined, limit: n })).map((f) => ({ id: f.id, title: f.documentTitle, text: f.text })).filter((f) => !direct.some((d) => d.id === f.id)).sort(byId);
+  return toPrompt([...direct, ...found].slice(0, n));
 };
 
 const conceptBrief = (c: typeof schema.lmConcepts.$inferSelect) => JSON.stringify({ title: c.title, formulas: c.formulas, instructor_rules: c.instructorRules.map((r) => r.rule) });
@@ -243,7 +245,7 @@ async function stageMcq(c: typeof schema.lmConcepts.$inferSelect, cm: ChunkMap) 
 
 async function stageScenarios(c: typeof schema.lmConcepts.$inferSelect, all: (typeof schema.lmConcepts.$inferSelect)[], cm: ChunkMap) {
   const t = targets();
-  const methods = [...new Set(all.filter((x) => x.id !== c.id).flatMap((x) => [x.title]))].slice(0, 20);
+  const methods = [...new Set(all.filter((x) => x.id !== c.id).sort((a, b) => a.position - b.position).map((x) => x.title))].slice(0, 20);
   if (methods.length < 3) return { kept: 0, rejected: 0 };
   const { data } = await callJson(c.userId, "D_scenario", `Method list:\n${methods.map((m) => `- ${m}`).join("\n")}\nWrite ${t.scenarios} scenarios.\n\n${courseMaterial(cm.chunks)}`, scenarioSchema, { maxTokens: 2900 });
   const valid = data.items.filter((s) => methods.includes(s.correct_method) && methods.includes(s.tempting_alternative) && s.correct_method !== s.tempting_alternative);
@@ -272,7 +274,7 @@ export async function runBuild(buildId: string): Promise<void> {
     if (!concepts.length) return fail("No concepts could be built from the selected modules. Check that they contain imported material.");
     const total = concepts.length * 3; let done = 0;
     await setBuild(buildId, { stage: "lessons and questions", total });
-    const allConcepts = await db.select().from(schema.lmConcepts).where(eq(schema.lmConcepts.courseId, build.courseId));
+    const allConcepts = await db.select().from(schema.lmConcepts).where(eq(schema.lmConcepts.courseId, build.courseId)).orderBy(asc(schema.lmConcepts.position));
     const methodConcept = concepts.find((c) => /which method|how to choose|choose the (right )?(method|test)/i.test(c.title));
     const t = targets();
     for (const c of concepts) {
